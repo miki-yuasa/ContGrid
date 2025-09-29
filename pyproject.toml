@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "Continuous space adaptation of grid-world envs in Gymnasium"
 readme = "README.md"
 authors = [{ name = "Mikihisa Yuasa", email = "myuasa2@illinois.edu" }]
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.11"
+dependencies = ["gymnasium>=1.0.0", "pygame>=2.5.0"]
 
 [build-system]
 requires = ["hatchling"]
