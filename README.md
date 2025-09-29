@@ -1,2 +1,2 @@
 # ContGrid
-Continous space adaptation of gridworld envs in Gymnasium
+Continuous space adaptation of grid-world envs in Gymnasium

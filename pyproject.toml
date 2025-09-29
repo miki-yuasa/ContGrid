@@ -1,0 +1,18 @@
+[project]
+name = "ContGrid"
+version = "0.1.0"
+description = "Continuous space adaptation of grid-world envs in Gymnasium"
+readme = "README.md"
+authors = [{ name = "Mikihisa Yuasa", email = "myuasa2@illinois.edu" }]
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["contgrid"]
