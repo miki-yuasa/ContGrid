@@ -1,20 +1,9 @@
-from typing import Callable, Generic, TypeVar
+from typing import Callable, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
-
-class EntityState:  # physical/external base state of all entities
-    p_pos: NDArray[np.float64]
-    p_vel: NDArray[np.float64]
-
-    def __init__(self):
-        # physical position
-        self.p_pos: NDArray[np.float64] = np.array([np.nan, np.nan], dtype=np.float64)
-        self.p_vel: NDArray[np.float64] = np.array([0.0, 0.0], dtype=np.float64)
-
-
-EntityStateT = TypeVar("EntityStateT", bound=EntityState, covariant=True)
+from .entities import Entity, EntityState, EntityStateT, Landmark
 
 
 class AgentState(
@@ -32,90 +21,6 @@ class Action:  # action of the agent
         self.u: NDArray[np.float64] = np.array([0.0, 0.0], dtype=np.float64)
         # communication action
         self.c: NDArray[np.float64] = np.array(0.0, dtype=np.float64)
-
-
-class Entity(Generic[EntityStateT]):  # properties and state of physical world entity
-    """
-    Properties and state of physical world entity
-
-    Attributes
-    ----------
-    name : str
-        Name of the entity
-    size : float
-        Size of the entity
-    movable : bool
-        Whether the entity can move or be pushed
-    collide : bool
-        Whether the entity collides with others
-    density : float
-        Material density (affects mass)
-    color : str | None
-        Color of the entity
-    max_speed : float | None
-        Maximum speed of the entity
-    accel : float | None
-        Acceleration of the entity
-    state : EntityStateT
-        State of the entity
-    initial_mass : float
-        Initial mass of the entity
-    mass : float
-        Mass of the entity (property)
-    """
-
-    name: str
-    size: float
-    movable: bool
-    collide: bool
-    density: float
-    color: str | None
-    max_speed: float | None
-    accel: float | None
-    state: EntityStateT
-    initial_mass: float
-
-    def __init__(
-        self,
-        name: str = "",
-        size: float = 0.050,
-        movable: bool = False,
-        collide: bool = True,
-        density: float = 25.0,
-        color: str | None = None,
-        max_speed: float | None = None,
-        accel: float | None = None,
-        state: EntityStateT = EntityState(),
-        initial_mass: float = 1.0,
-    ):
-        # name
-        self.name = name
-        # properties:
-        self.size = size
-        # entity can move / be pushed
-        self.movable = movable
-        # entity collides with others
-        self.collide = collide
-        # material density (affects mass)
-        self.density = density
-        # color
-        self.color = color
-        # max speed and accel
-        self.max_speed = max_speed
-        self.accel = accel
-        # state
-        self.state = state
-        # mass
-        self.initial_mass = initial_mass
-
-    @property
-    def mass(self):
-        return self.initial_mass
-
-
-class Landmark(Entity[EntityState]):  # properties of landmark entities
-    def __init__(self):
-        super().__init__()
 
 
 class Agent(Entity[AgentState]):  # properties of agent entities
@@ -171,7 +76,7 @@ class Agent(Entity[AgentState]):  # properties of agent entities
         # control range
         self.u_range = u_range
         # action
-        self.action = Action()
+        self.action = action
         # script behavior to execute
         self.action_callback = action_callback
 
@@ -195,9 +100,12 @@ class World:  # multi-agent world
         self.contact_force: float = 1e2
         self.contact_margin: float = 1e-3
 
+        # grid size
+        self.grid_size: float = 0.100
+
     # return all entities in the world
     @property
-    def entities(self) -> list[Agent | Landmark]:
+    def entities(self) -> Sequence[Entity]:
         return self.agents + self.landmarks
 
     # return all agents controllable by external policies
@@ -250,31 +158,34 @@ class World:  # multi-agent world
         self, p_force: list[None | NDArray[np.float64]]
     ) -> list[None | NDArray[np.float64]]:
         # simple (but inefficient) collision response
+        new_p_force: list[None | NDArray[np.float64]] = [p for p in p_force]
         for a, entity_a in enumerate(self.entities):
             for b, entity_b in enumerate(self.entities):
                 if b <= a:
                     continue
                 [f_a, f_b] = self.get_collision_force(entity_a, entity_b)
-                if f_a is not None:
-                    if p_force[a] is None:
-                        p_force[a] = np.array(0.0, dtype=np.float64)
-                    p_force[a] = f_a + p_force[a]
-                if f_b is not None:
-                    if p_force[b] is None:
-                        p_force[b] = np.array(0.0, dtype=np.float64)
-                    p_force[b] = f_b + p_force[b]
-        return p_force
+                if f_a:
+                    a_p_force = new_p_force[a]
+                    if not a_p_force:
+                        a_p_force = np.array(0.0, dtype=np.float64)
+                    new_p_force[a] = f_a + a_p_force
+                if f_b:
+                    b_p_force = new_p_force[b]
+                    if not b_p_force:
+                        b_p_force = np.array(0.0, dtype=np.float64)
+                    new_p_force[b] = f_b + b_p_force
+        return new_p_force
 
     # integrate physical state
-    def integrate_state(self, p_force: list[None | NDArray[np.float64]]):
-        for i, entity in enumerate(self.entities):
+    def integrate_state(self, p_force: list[None | NDArray[np.float64]]) -> None:
+        for force, entity in zip(p_force, self.entities):
             if not entity.movable:
                 continue
             entity.state.p_pos += entity.state.p_vel * self.dt
             entity.state.p_vel = entity.state.p_vel * (1 - self.damping)
-            if p_force[i] is not None:
-                entity.state.p_vel += (p_force[i] / entity.mass) * self.dt
-            if entity.max_speed is not None:
+            if force:
+                entity.state.p_vel += (force / entity.mass) * self.dt
+            if entity.max_speed:
                 speed = np.sqrt(
                     np.square(entity.state.p_vel[0]) + np.square(entity.state.p_vel[1])
                 )
