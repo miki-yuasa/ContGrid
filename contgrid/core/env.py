@@ -18,7 +18,7 @@ alphabet: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 ActionType = TypeVar("ActionType", bound=np.ndarray | int | None)
 
 
-class SimpleEnv(Generic[ActionType]):
+class BaseEnv(Generic[ActionType]):
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "is_parallelizable": True,
