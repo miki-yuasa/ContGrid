@@ -1,5 +1,5 @@
 import os
-from typing import Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 import gymnasium
 import numpy as np
@@ -7,19 +7,28 @@ import pygame
 import pygame.freetype
 from gymnasium import spaces
 from gymnasium.utils import seeding
+from numpy.typing import NDArray
 
 from .scenario import BaseScenario
+from .utils import AgentSelector
 from .world import Agent, World
 
 alphabet: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+ActionType = TypeVar("ActionType", bound=np.ndarray | int | None)
 
-class SimpleEnv:
+
+class SimpleEnv(Generic[ActionType]):
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "is_parallelizable": True,
         "render_fps": 10,
     }
+
+    continuous_modes: list[Literal["continuous", "continuous-minimal"]] = [
+        "continuous",
+        "continuous-minimal",
+    ]
 
     def __init__(
         self,
@@ -27,7 +36,9 @@ class SimpleEnv:
         world: World,
         max_cycles: int,
         render_mode: str | None = None,
-        continuous_actions: bool = True,
+        action_mode: Literal[
+            "discrete", "continuous", "continuous-minimal"
+        ] = "continuous-minimal",
         local_ratio: float | None = None,
         dynamic_rescaling: bool = False,
     ):
@@ -52,7 +63,9 @@ class SimpleEnv:
         self.max_cycles = max_cycles
         self.scenario = scenario
         self.world = world
-        self.continuous_actions = continuous_actions
+        self.action_mode: Literal["discrete", "continuous", "continuous-minimal"] = (
+            action_mode
+        )
         self.local_ratio = local_ratio
         self.dynamic_rescaling = dynamic_rescaling
 
@@ -60,42 +73,48 @@ class SimpleEnv:
 
         self.agents = [agent.name for agent in self.world.agents]
         self.possible_agents = self.agents[:]
-        self._index_map = {
+        self._index_map: dict[str, int] = {
             agent.name: idx for idx, agent in enumerate(self.world.agents)
         }
 
-        self._agent_selector = AgentSelector(self.agents)
+        self._agent_selector: AgentSelector[str] = AgentSelector(self.agents)
 
         # set spaces
-        self.action_spaces = dict()
-        self.observation_spaces = dict()
-        state_dim = 0
+        self.action_spaces: dict[str, spaces.Space] = dict()
+        self.observation_spaces: dict[str, spaces.Space] = dict()
+        state_dim: int = 0
         for agent in self.world.agents:
             if agent.movable:
-                space_dim = self.world.dim_p * 2 + 1
-            elif self.continuous_actions:
+                space_dim = self.movable_agent_action_dim(self.action_mode)
+            elif self.action_mode in self.continuous_modes:
                 space_dim = 0
             else:
                 space_dim = 1
+
             if not agent.silent:
-                if self.continuous_actions:
+                if self.action_mode in self.continuous_modes:
                     space_dim += self.world.dim_c
                 else:
                     space_dim *= self.world.dim_c
 
             obs_dim = len(self.scenario.observation(agent, self.world))
             state_dim += obs_dim
-            if self.continuous_actions:
-                self.action_spaces[agent.name] = spaces.Box(
-                    low=0, high=1, shape=(space_dim,)
-                )
-            else:
-                self.action_spaces[agent.name] = spaces.Discrete(space_dim)
-            self.observation_spaces[agent.name] = spaces.Box(
-                low=-np.float32(np.inf),
-                high=+np.float32(np.inf),
-                shape=(obs_dim,),
-                dtype=np.float32,
+            match self.action_mode:
+                case "continuous":
+                    self.action_spaces[agent.name] = spaces.Box(
+                        low=0, high=1, shape=(space_dim,)
+                    )
+                case "continuous-minimal":
+                    self.action_spaces[agent.name] = spaces.Box(
+                        low=-1, high=1, shape=(space_dim,)
+                    )
+                case "discrete":
+                    self.action_spaces[agent.name] = spaces.Discrete(space_dim)
+                case _:
+                    raise ValueError(f"Unknown action mode {self.action_mode}")
+
+            self.observation_spaces[agent.name] = scenario.observation_space(
+                agent, self.world
             )
 
         self.state_space = spaces.Box(
@@ -112,28 +131,34 @@ class SimpleEnv:
 
         self.steps = 0
 
-        self.current_actions = [None] * self.num_agents
+        self.current_actions: list[ActionType | None] = [None] * self.num_agents
+
+    def movable_agent_action_dim(self, action_mode: str) -> int:
+        if action_mode == "continuous-minimal":
+            return self.world.dim_p * 2
+        else:
+            return self.world.dim_p * 2 + 1
 
     @property
     def num_agents(self) -> int:
         return len(self.agents)
 
-    def observation_space(self, agent):
+    def observation_space(self, agent: str):
         return self.observation_spaces[agent]
 
-    def action_space(self, agent):
+    def action_space(self, agent: str):
         return self.action_spaces[agent]
 
-    def _seed(self, seed=None):
+    def _seed(self, seed: int | None = None):
         self.np_random, seed = seeding.np_random(seed)
 
-    def observe(self, agent):
+    def observe(self, agent: str) -> NDArray[np.float32]:
         return self.scenario.observation(
             self.world.agents[self._index_map[agent]], self.world
         ).astype(np.float32)
 
-    def state(self):
-        states = tuple(
+    def state(self) -> NDArray[np.float32]:
+        states: tuple[NDArray[np.float32], ...] = tuple(
             self.scenario.observation(
                 self.world.agents[self._index_map[agent]], self.world
             ).astype(np.float32)
@@ -141,7 +166,7 @@ class SimpleEnv:
         )
         return np.concatenate(states, axis=None)
 
-    def reset(self, seed=None, options=None):
+    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         if seed is not None:
             self._seed(seed=seed)
         self.scenario.reset_world(self.world, self.np_random)
@@ -156,84 +181,9 @@ class SimpleEnv:
         self.agent_selection = self._agent_selector.reset()
         self.steps = 0
 
-        self.current_actions = [None] * self.num_agents
+        self.current_actions: list[ActionType | None] = [None] * self.num_agents
 
-    def _execute_world_step(self):
-        # set action for each agent
-        for i, agent in enumerate(self.world.agents):
-            action = self.current_actions[i]
-            assert action
-            scenario_action = []
-            if agent.movable:
-                mdim = self.world.dim_p * 2 + 1
-                if self.continuous_actions:
-                    scenario_action.append(action[0:mdim])
-                    action = action[mdim:]
-                else:
-                    scenario_action.append(action % mdim)
-                    action //= mdim
-            if not agent.silent:
-                scenario_action.append(action)
-            self._set_action(scenario_action, agent, self.action_spaces[agent.name])
-
-        self.world.step()
-
-        global_reward = 0.0
-        if self.local_ratio is not None:
-            global_reward = float(self.scenario.global_reward(self.world))
-
-        for agent in self.world.agents:
-            agent_reward = float(self.scenario.reward(agent, self.world))
-            if self.local_ratio is not None:
-                reward = (
-                    global_reward * (1 - self.local_ratio)
-                    + agent_reward * self.local_ratio
-                )
-            else:
-                reward = agent_reward
-
-            self.rewards[agent.name] = reward
-
-    # set env action for a particular agent
-    def _set_action(self, action, agent: Agent, action_space, time=None):
-        agent.action.u = np.zeros(self.world.dim_p)
-        agent.action.c = np.zeros(self.world.dim_c)
-
-        if agent.movable:
-            # physical action
-            agent.action.u = np.zeros(self.world.dim_p)
-            if self.continuous_actions:
-                # Process continuous action as in OpenAI MPE
-                # Note: this ordering preserves the same movement direction as in the discrete case
-                agent.action.u[0] += action[0][2] - action[0][1]
-                agent.action.u[1] += action[0][4] - action[0][3]
-            else:
-                # process discrete action
-                if action[0] == 1:
-                    agent.action.u[0] = -1.0
-                if action[0] == 2:
-                    agent.action.u[0] = +1.0
-                if action[0] == 3:
-                    agent.action.u[1] = -1.0
-                if action[0] == 4:
-                    agent.action.u[1] = +1.0
-            sensitivity = 5.0
-            if agent.accel is not None:
-                sensitivity = agent.accel
-            agent.action.u *= sensitivity
-            action = action[1:]
-        if not agent.silent:
-            # communication action
-            if self.continuous_actions:
-                agent.action.c = action[0]
-            else:
-                agent.action.c = np.zeros(self.world.dim_c)
-                agent.action.c[action[0]] = 1.0
-            action = action[1:]
-        # make sure we used all elements of action
-        assert len(action) == 0
-
-    def step(self, action):
+    def step(self, action: ActionType) -> None:
         if (
             self.terminations[self.agent_selection]
             or self.truncations[self.agent_selection]
@@ -261,6 +211,89 @@ class SimpleEnv:
 
         if self.render_mode == "human":
             self.render()
+
+    def _execute_world_step(self):
+        # set action for each agent
+        for i, agent in enumerate(self.world.agents):
+            action = self.current_actions[i]
+            scenario_action: list[NDArray | int] = []
+            if agent.movable:
+                mdim = self.movable_agent_action_dim(self.action_mode)
+                if self.action_mode in self.continuous_modes:
+                    assert isinstance(action, np.ndarray)
+                    scenario_action.append(action[0:mdim])
+                    action = action[mdim:]
+                else:
+                    assert isinstance(action, int) or isinstance(action, np.integer)
+                    scenario_action.append(action % mdim)
+                    action //= mdim
+            if not agent.silent:
+                scenario_action.append(action)
+            self._set_action(scenario_action, agent, self.action_spaces[agent.name])
+
+        self.world.step()
+
+        global_reward = 0.0
+        if self.local_ratio is not None:
+            global_reward = float(self.scenario.global_reward(self.world))
+
+        for agent in self.world.agents:
+            agent_reward = float(self.scenario.reward(agent, self.world))
+            if self.local_ratio is not None:
+                reward = (
+                    global_reward * (1 - self.local_ratio)
+                    + agent_reward * self.local_ratio
+                )
+            else:
+                reward = agent_reward
+
+            self.rewards[agent.name] = reward
+
+    # set env action for a particular agent
+    def _set_action(
+        self, action: list[NDArray | int], agent: Agent, action_space, time=None
+    ):
+        agent.action.u = np.zeros(self.world.dim_p)
+        agent.action.c = np.zeros(self.world.dim_c)
+
+        if agent.movable:
+            # physical action
+            agent.action.u = np.zeros(self.world.dim_p)
+            match self.action_mode:
+                case "continuous":
+                    assert isinstance(action[0], np.ndarray)
+                    agent.action.u[0] += action[0][2] - action[0][1]
+                    agent.action.u[1] += action[0][4] - action[0][3]
+                case "continuous-minimal":
+                    assert isinstance(action[0], np.ndarray)
+                    agent.action.u[0] += action[0][0]
+                    agent.action.u[1] += action[0][1]
+                case "discrete":
+                    if action[0] == 1:
+                        agent.action.u[0] = -1.0
+                    if action[0] == 2:
+                        agent.action.u[0] = +1.0
+                    if action[0] == 3:
+                        agent.action.u[1] = -1.0
+                    if action[0] == 4:
+                        agent.action.u[1] = +1.0
+
+            sensitivity = 5.0
+            if agent.accel is not None:
+                sensitivity = agent.accel
+            agent.action.u *= sensitivity
+            action = action[1:]
+        if not agent.silent:
+            # communication action
+            if self.action_mode in self.continuous_modes:
+                assert isinstance(action[0], np.ndarray)
+                agent.action.c = action[0]
+            else:
+                agent.action.c = np.zeros(self.world.dim_c)
+                agent.action.c[action[0]] = 1.0
+            action = action[1:]
+        # make sure we used all elements of action
+        assert len(action) == 0
 
     def _was_dead_step(self, action: ActionType) -> None:
         """Helper function that performs step() for dead agents.
@@ -325,7 +358,7 @@ class SimpleEnv:
         for agent, reward in self.rewards.items():
             self._cumulative_rewards[agent] += reward
 
-    def enable_render(self, mode="human"):
+    def enable_render(self, mode: str = "human") -> None:
         if not self.renderOn and mode == "human" and self.screen:
             self.screen = pygame.display.set_mode(self.screen.get_size())
             self.clock = pygame.time.Clock()
@@ -399,7 +432,7 @@ class SimpleEnv:
                     continue
                 if np.all(entity.state.c == 0):
                     word = "_"
-                elif self.continuous_actions:
+                elif self.action_mode in self.continuous_modes:
                     word = (
                         "[" + ",".join([f"{comm:.2f}" for comm in entity.state.c]) + "]"
                     )

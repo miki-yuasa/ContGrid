@@ -1,3 +1,4 @@
+from enum import Enum, auto
 from typing import Generic, TypeVar
 
 import numpy as np
@@ -15,6 +16,11 @@ class EntityState:  # physical/external base state of all entities
 
 
 EntityStateT = TypeVar("EntityStateT", bound=EntityState, covariant=True)
+
+
+class EntityShape(Enum):
+    CIRCLE = auto()
+    SQUARE = auto()
 
 
 class Entity(Generic[EntityStateT]):  # properties and state of physical world entity
@@ -49,6 +55,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
 
     name: str
     size: float
+    shape: EntityShape
     movable: bool
     collide: bool
     density: float
@@ -62,6 +69,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         self,
         name: str = "",
         size: float = 0.050,
+        shape: EntityShape = EntityShape.CIRCLE,
         movable: bool = False,
         collide: bool = True,
         density: float = 25.0,
@@ -75,6 +83,8 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         self.name = name
         # properties:
         self.size = size
+        # shape
+        self.shape = shape
         # entity can move / be pushed
         self.movable = movable
         # entity collides with others
@@ -101,6 +111,7 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
         self,
         name: str = "",
         size: float = 0.05,
+        shape: EntityShape = EntityShape.CIRCLE,
         movable: bool = False,
         collide: bool = True,
         density: float = 25,
@@ -113,6 +124,7 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
         super().__init__(
             name,
             size,
+            shape,
             movable,
             collide,
             density,

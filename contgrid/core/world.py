@@ -3,7 +3,7 @@ from typing import Callable, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from .entities import Entity, EntityState, EntityStateT, Landmark
+from .entities import Entity, EntityShape, EntityState, EntityStateT, Landmark
 
 
 class AgentState(
@@ -36,6 +36,7 @@ class Agent(Entity[AgentState]):  # properties of agent entities
         self,
         name: str = "",
         size: float = 0.05,
+        shape: EntityShape = EntityShape.CIRCLE,
         movable: bool = True,
         collide: bool = True,
         density: float = 25,
@@ -44,7 +45,7 @@ class Agent(Entity[AgentState]):  # properties of agent entities
         accel: float | None = None,
         state: AgentState = AgentState(),
         initial_mass: float = 1,
-        silent: bool = False,
+        silent: bool = True,
         blind: bool = False,
         u_noise: float | None = None,
         c_noise: float | None = None,
@@ -55,6 +56,7 @@ class Agent(Entity[AgentState]):  # properties of agent entities
         super().__init__(
             name,
             size,
+            shape,
             movable,
             collide,
             density,
@@ -105,7 +107,7 @@ class World:  # multi-agent world
 
     # return all entities in the world
     @property
-    def entities(self) -> Sequence[Entity]:
+    def entities(self) -> list[Agent | Landmark]:
         return self.agents + self.landmarks
 
     # return all agents controllable by external policies
