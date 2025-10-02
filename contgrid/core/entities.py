@@ -6,13 +6,22 @@ from numpy.typing import NDArray
 
 
 class EntityState:  # physical/external base state of all entities
-    p_pos: NDArray[np.float64]
-    p_vel: NDArray[np.float64]
+    pos: NDArray[np.float64]
+    vel: NDArray[np.float64]
+    rot: float
+    ang_vel: float
 
     def __init__(self):
         # physical position
-        self.p_pos: NDArray[np.float64] = np.array([np.nan, np.nan], dtype=np.float64)
-        self.p_vel: NDArray[np.float64] = np.array([0.0, 0.0], dtype=np.float64)
+        self.pos: NDArray[np.float64] = np.array([np.nan, np.nan], dtype=np.float64)
+        # physical velocity
+        self.vel: NDArray[np.float64] = np.array([0.0, 0.0], dtype=np.float64)
+
+        # To be implemented in future versions
+        # physical rotation -- from -pi to pi, 0 means facing right, pi/2 means facing up
+        self.rot: float = 0.0
+        # angular velocity
+        self.ang_vel: float = 0.0
 
 
 EntityStateT = TypeVar("EntityStateT", bound=EntityState, covariant=True)
@@ -57,6 +66,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
     size: float
     shape: EntityShape
     movable: bool
+    rotatable: bool
     collide: bool
     density: float
     color: str | None
@@ -71,6 +81,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         size: float = 0.050,
         shape: EntityShape = EntityShape.CIRCLE,
         movable: bool = False,
+        rotatable: bool = False,
         collide: bool = True,
         density: float = 25.0,
         color: str | None = None,
@@ -87,6 +98,8 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         self.shape = shape
         # entity can move / be pushed
         self.movable = movable
+        # entity can rotate
+        self.rotatable = rotatable
         # entity collides with others
         self.collide = collide
         # material density (affects mass)

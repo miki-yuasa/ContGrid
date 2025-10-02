@@ -9,6 +9,8 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 from numpy.typing import NDArray
 
+from .entities import EntityShape
+from .grid import Grid
 from .scenario import BaseScenario
 from .utils import AgentSelector
 from .world import Agent, World
@@ -34,8 +36,9 @@ class BaseEnv(Generic[ActionType]):
         self,
         scenario: BaseScenario,
         world: World,
+        grid: Grid,
         max_cycles: int,
-        render_mode: str | None = None,
+        render_mode: str | None = "rgb_array",
         action_mode: Literal[
             "discrete", "continuous", "continuous-minimal"
         ] = "continuous-minimal",
@@ -47,8 +50,9 @@ class BaseEnv(Generic[ActionType]):
         self.render_mode = render_mode
         pygame.init()
         self.viewer = None
-        self.width = 700
-        self.height = 700
+        self.grid: Grid = grid
+        self.width = grid.width
+        self.height = grid.height
         self.screen = pygame.Surface([self.width, self.height])
         self.max_size = 1
         self.game_font = pygame.freetype.Font(
@@ -400,8 +404,10 @@ class BaseEnv(Generic[ActionType]):
 
         # update geometry and text positions
         text_line = 0
-        for e, entity in enumerate(self.world.entities):
+        for entity in self.world.entities:
             # geometry
+            x: float
+            y: float
             x, y = entity.state.p_pos
             y *= (
                 -1
@@ -420,8 +426,15 @@ class BaseEnv(Generic[ActionType]):
                 radius = entity.size * 350
 
             assert entity.color
-            pygame.draw.circle(self.screen, entity.color * 200, (x, y), radius)
-            pygame.draw.circle(self.screen, (0, 0, 0), (x, y), radius, 1)  # borders
+            self._draw_shape(
+                self.screen,
+                entity.shape,
+                entity.color * 200,
+                x,
+                y,
+                radius,
+            )
+
             assert 0 < x < self.width and 0 < y < self.height, (
                 f"Coordinates {(x, y)} are out of bounds."
             )
@@ -446,6 +459,23 @@ class BaseEnv(Generic[ActionType]):
                     self.screen, (message_x_pos, message_y_pos), message, (0, 0, 0)
                 )
                 text_line += 1
+
+    def _draw_shape(
+        self,
+        screen: pygame.Surface,
+        shape: EntityShape,
+        color: str,
+        x: float,
+        y: float,
+        size: float,
+    ):
+        if shape == EntityShape.CIRCLE:
+            pygame.draw.circle(screen, color, (x, y), size)
+            pygame.draw.circle(screen, (0, 0, 0), (x, y), size, 1)  # borders
+        elif shape == EntityShape.SQUARE:
+            pygame.draw.rect(screen, color, (x, y, size, size))
+        else:
+            raise ValueError(f"Unknown shape: {shape}")
 
     def close(self):
         if self.screen:
