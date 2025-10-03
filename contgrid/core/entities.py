@@ -4,6 +4,8 @@ from typing import Generic, TypeVar
 import numpy as np
 from numpy.typing import NDArray
 
+from .const import Color
+
 
 class EntityState:  # physical/external base state of all entities
     pos: NDArray[np.float64]
@@ -11,17 +13,27 @@ class EntityState:  # physical/external base state of all entities
     rot: float
     ang_vel: float
 
-    def __init__(self):
+    def __init__(
+        self,
+        pos: NDArray[np.float64] | None = None,
+        vel: NDArray[np.float64] | None = None,
+        rot: float = 0.0,
+        ang_vel: float = 0.0,
+    ) -> None:
         # physical position
-        self.pos: NDArray[np.float64] = np.array([np.nan, np.nan], dtype=np.float64)
+        self.pos: NDArray[np.float64] = (
+            pos if pos is not None else np.array([np.nan, np.nan], dtype=np.float64)
+        )
         # physical velocity
-        self.vel: NDArray[np.float64] = np.array([0.0, 0.0], dtype=np.float64)
+        self.vel: NDArray[np.float64] = (
+            vel if vel is not None else np.array([0.0, 0.0], dtype=np.float64)
+        )
 
         # To be implemented in future versions
         # physical rotation -- from -pi to pi, 0 means facing right, pi/2 means facing up
-        self.rot: float = 0.0
+        self.rot: float = rot
         # angular velocity
-        self.ang_vel: float = 0.0
+        self.ang_vel: float = ang_vel
 
 
 EntityStateT = TypeVar("EntityStateT", bound=EntityState, covariant=True)
@@ -69,7 +81,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
     rotatable: bool
     collide: bool
     density: float
-    color: str | None
+    color: Color = Color.WHITE
     max_speed: float | None
     accel: float | None
     state: EntityStateT
@@ -84,7 +96,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         rotatable: bool = False,
         collide: bool = True,
         density: float = 25.0,
-        color: str | None = None,
+        color: Color = Color.WHITE,
         max_speed: float | None = None,
         accel: float | None = None,
         state: EntityStateT = EntityState(),
@@ -126,9 +138,10 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
         size: float = 0.05,
         shape: EntityShape = EntityShape.CIRCLE,
         movable: bool = False,
+        rotatable: bool = False,
         collide: bool = True,
         density: float = 25,
-        color: str | None = None,
+        color: Color = Color.GREEN,
         max_speed: float | None = None,
         accel: float | None = None,
         state: EntityState = EntityState(),
@@ -139,6 +152,7 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
             size,
             shape,
             movable,
+            rotatable,
             collide,
             density,
             color,

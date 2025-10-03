@@ -4,18 +4,27 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
-from .const import COLLISION_FORCE, CONTACT_MARGIN, DRAG
+from .const import COLLISION_FORCE, CONTACT_MARGIN, DRAG, Color
 from .entities import Entity, EntityShape, EntityState, EntityStateT, Landmark
-from .grid import DEFAULT_GRID, Grid
+from .grid import DEFAULT_GRID, Grid, WallCollisionChecker
 
 
 class AgentState(
     EntityState
 ):  # state of agents (including communication and internal/mental state)
-    def __init__(self):
-        super().__init__()
+    def __init__(
+        self,
+        pos: NDArray[np.float64] | None = None,
+        vel: NDArray[np.float64] | None = None,
+        rot: float = 0,
+        ang_vel: float = 0,
+        c: NDArray[np.float64] | None = None,
+    ) -> None:
+        super().__init__(pos, vel, rot, ang_vel)
         # communication utterance
-        self.c: NDArray[np.float64] = np.array(0.0, dtype=np.float64)
+        self.c: NDArray[np.float64] = (
+            c if c is not None else np.array(0.0, dtype=np.float64)
+        )
 
 
 class Action:  # action of the agent
@@ -44,7 +53,7 @@ class Agent(Entity[AgentState]):  # properties of agent entities
         rotatable: bool = False,
         collide: bool = True,
         density: float = 25,
-        color: str | None = None,
+        color: Color = Color.BLUE,
         max_speed: float | None = None,
         accel: float | None = None,
         state: AgentState = AgentState(),
@@ -134,7 +143,40 @@ class World:  # multi-agent world
         self.contact_margin: float = contact_margin
 
         # grid size
-        self.grid_size: float = 0.100
+        self.grid_size: float = self.grid.cell_size
+
+        # initialize wall collision checker and wall entities
+        self.wall_collision_checker: WallCollisionChecker
+        self.walls: list[Landmark]
+        self.wall_collision_checker, self.walls = self._init_walls(self.grid)
+
+    def _init_walls(self, grid: Grid) -> tuple[WallCollisionChecker, list[Landmark]]:
+        wall_collision_checker = WallCollisionChecker(grid.layout, grid.cell_size)
+
+        walls: list[Landmark] = []
+        for i, (center_x, center_y) in enumerate(wall_collision_checker.wall_centers):
+            wall = Landmark(
+                name=f"wall_{i}",
+                size=self.grid.cell_size / 2,
+                shape=EntityShape.SQUARE,
+                movable=False,
+                rotatable=False,
+                collide=True,
+                density=1000,
+                color=Color.GREY,
+                max_speed=None,
+                accel=None,
+                state=EntityState(
+                    pos=np.array([center_x, center_y], dtype=np.float64),
+                    vel=None,
+                    rot=0.0,
+                    ang_vel=0.0,
+                ),
+                initial_mass=1000,
+            )
+            walls.append(wall)
+
+        return wall_collision_checker, walls
 
     # return all entities in the world
     @property
@@ -215,7 +257,7 @@ class World:  # multi-agent world
             if not entity.movable:
                 continue
             entity.state.pos += entity.state.vel * self.dt
-            entity.state.vel = entity.state.vel * (1 - self.damping)
+            entity.state.vel = entity.state.vel * (1 - self.drag)
             if force:
                 entity.state.vel += (force / entity.mass) * self.dt
             if entity.max_speed:
@@ -264,3 +306,18 @@ class World:  # multi-agent world
         force_a: NDArray[np.float64] | None = +force if entity_a.movable else None
         force_b: NDArray[np.float64] | None = -force if entity_b.movable else None
         return [force_a, force_b]
+
+    def get_wall_collision_force(self, agent: Agent) -> NDArray[np.float64] | None:
+        if not agent.collide or not agent.movable:
+            return None  # not a collider
+
+        # Check for collision using the WallCollisionChecker
+        collided, force = self.wall_collision_checker.is_collision(
+            agent.size,
+            self.contact_margin,
+            tuple(agent.state.pos),
+            self.collision_force,
+            self.contact_margin,
+        )
+        if collided:
+            return force * self.collision_force

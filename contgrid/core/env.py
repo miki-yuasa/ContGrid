@@ -9,13 +9,12 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 from numpy.typing import NDArray
 
+from .const import ALPHABET, Color
 from .entities import EntityShape
 from .grid import Grid
 from .scenario import BaseScenario, ScenarioConfigT
 from .utils import AgentSelector
 from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfigT
-
-alphabet: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 ActionType = TypeVar("ActionType", bound=np.ndarray | int | None)
 
@@ -36,7 +35,6 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
         self,
         scenario: BaseScenario[WorldConfigT, ScenarioConfigT],
         world_config: WorldConfigT = DEFAULT_WORLD_CONFIG,
-        scenario_config: ScenarioConfigT | None = None,
         max_cycles: int = 100,
         render_mode: str | None = "rgb_array",
         action_mode: Literal[
@@ -50,7 +48,7 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
         self.render_mode = render_mode
         pygame.init()
         self.viewer = None
-        self.world: World = scenario.make_world(world_config, scenario_config)
+        self.world: World = scenario.make_world(world_config)
         self.grid: Grid = self.world.grid
         self.width = self.grid.width
         self.height = self.grid.height
@@ -130,7 +128,7 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
 
         # Get the original cam_range
         # This will be used to scale the rendering
-        all_poses = [entity.state.p_pos for entity in self.world.entities]
+        all_poses = [entity.state.pos for entity in self.world.entities]
         self.original_cam_range = np.max(np.abs(np.array(all_poses)))
 
         self.steps = 0
@@ -387,7 +385,7 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
             self.clock.tick(self.metadata["render_fps"])
             return
 
-    def draw(self):
+    def draw(self, alphabet: str = ALPHABET):
         # clear screen
         assert self.screen, (
             "Call enable_render() or set render_mode to human or rgb_array"
@@ -408,7 +406,7 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
             # geometry
             x: float
             y: float
-            x, y = entity.state.p_pos
+            x, y = entity.state.pos
             y *= (
                 -1
             )  # this makes the display mimic the old pyglet setup (ie. flips image)
@@ -429,7 +427,7 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
             self._draw_shape(
                 self.screen,
                 entity.shape,
-                entity.color * 200,
+                entity.color,
                 x,
                 y,
                 radius,
@@ -464,7 +462,7 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
         self,
         screen: pygame.Surface,
         shape: EntityShape,
-        color: str,
+        color: Color,
         x: float,
         y: float,
         size: float,

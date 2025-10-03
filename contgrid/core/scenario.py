@@ -5,7 +5,8 @@ import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
 
-from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig, WorldConfigT
+from .entities import Landmark
+from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfigT
 
 ScenarioConfigT = TypeVar("ScenarioConfigT")
 
@@ -13,18 +14,49 @@ ScenarioConfigT = TypeVar("ScenarioConfigT")
 class BaseScenario(
     ABC, Generic[WorldConfigT, ScenarioConfigT]
 ):  # defines scenario upon which the world is built
-    @abstractmethod
+    def __init__(self, config: ScenarioConfigT | None = None) -> None:
+        self.config = config
+
     def make_world(
         self,
         world_config: WorldConfigT = DEFAULT_WORLD_CONFIG,
-        config: ScenarioConfigT | None = None,
     ) -> World:  # create elements of the world
+        world = World(**world_config.model_dump())
+        # add agents
+        world.agents = self.init_agents(world)
+        # add landmarks
+        world.landmarks = self.init_landmarks(world)
+
+        return world
+
+    @abstractmethod
+    def init_agents(
+        self, world: World, np_random: np.random.Generator | None = None
+    ) -> list[Agent]:
         pass
 
     @abstractmethod
+    def init_landmarks(
+        self, world: World, np_random: np.random.Generator | None = None
+    ) -> list[Landmark]:
+        pass
+
     def reset_world(
         self, world: World, np_random: np.random.Generator
-    ):  # create initial conditions of the world
+    ) -> None:  # create initial conditions of the world
+        # reset agents
+        world.agents = self.reset_agents(world, np_random)
+        # reset landmarks
+        world.landmarks = self.reset_landmarks(world, np_random)
+
+    @abstractmethod
+    def reset_agents(self, world: World, np_random: np.random.Generator) -> list[Agent]:
+        pass
+
+    @abstractmethod
+    def reset_landmarks(
+        self, world: World, np_random: np.random.Generator
+    ) -> list[Landmark]:
         pass
 
     @abstractmethod
