@@ -1,15 +1,24 @@
 from abc import ABC, abstractmethod
+from typing import Generic, TypeVar
 
 import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
 
-from .world import Agent, World
+from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig, WorldConfigT
+
+ScenarioConfigT = TypeVar("ScenarioConfigT")
 
 
-class BaseScenario(ABC):  # defines scenario upon which the world is built
+class BaseScenario(
+    ABC, Generic[WorldConfigT, ScenarioConfigT]
+):  # defines scenario upon which the world is built
     @abstractmethod
-    def make_world(self):  # create elements of the world
+    def make_world(
+        self,
+        world_config: WorldConfigT = DEFAULT_WORLD_CONFIG,
+        config: ScenarioConfigT | None = None,
+    ) -> World:  # create elements of the world
         pass
 
     @abstractmethod

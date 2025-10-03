@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class Grid(BaseModel):
-    layout: list[str] | list[tuple[int, int]]
+    layout: list[str] | list[list[str]] | list[tuple[int, int]]
     width_cells: int
     height_cells: int
     cell_size: float = 0.100
@@ -14,3 +14,11 @@ class Grid(BaseModel):
     @property
     def height(self) -> float:
         return self.height_cells * self.cell_size
+
+
+DEFAULT_GRID = Grid(
+    layout=["#####", "#000#", "#000#", "#000#", "#####"],
+    width_cells=10,
+    height_cells=10,
+    cell_size=0.100,
+)

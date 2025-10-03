@@ -11,16 +11,16 @@ from numpy.typing import NDArray
 
 from .entities import EntityShape
 from .grid import Grid
-from .scenario import BaseScenario
+from .scenario import BaseScenario, ScenarioConfigT
 from .utils import AgentSelector
-from .world import Agent, World
+from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfigT
 
 alphabet: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 ActionType = TypeVar("ActionType", bound=np.ndarray | int | None)
 
 
-class BaseEnv(Generic[ActionType]):
+class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "is_parallelizable": True,
@@ -34,10 +34,10 @@ class BaseEnv(Generic[ActionType]):
 
     def __init__(
         self,
-        scenario: BaseScenario,
-        world: World,
-        grid: Grid,
-        max_cycles: int,
+        scenario: BaseScenario[WorldConfigT, ScenarioConfigT],
+        world_config: WorldConfigT = DEFAULT_WORLD_CONFIG,
+        scenario_config: ScenarioConfigT | None = None,
+        max_cycles: int = 100,
         render_mode: str | None = "rgb_array",
         action_mode: Literal[
             "discrete", "continuous", "continuous-minimal"
@@ -50,9 +50,10 @@ class BaseEnv(Generic[ActionType]):
         self.render_mode = render_mode
         pygame.init()
         self.viewer = None
-        self.grid: Grid = grid
-        self.width = grid.width
-        self.height = grid.height
+        self.world: World = scenario.make_world(world_config, scenario_config)
+        self.grid: Grid = self.world.grid
+        self.width = self.grid.width
+        self.height = self.grid.height
         self.screen = pygame.Surface([self.width, self.height])
         self.max_size = 1
         self.game_font = pygame.freetype.Font(
@@ -66,7 +67,6 @@ class BaseEnv(Generic[ActionType]):
 
         self.max_cycles = max_cycles
         self.scenario = scenario
-        self.world = world
         self.action_mode: Literal["discrete", "continuous", "continuous-minimal"] = (
             action_mode
         )
@@ -75,7 +75,7 @@ class BaseEnv(Generic[ActionType]):
 
         self.scenario.reset_world(self.world, self.np_random)
 
-        self.agents = [agent.name for agent in self.world.agents]
+        self.agents: list[str] = [agent.name for agent in self.world.agents]
         self.possible_agents = self.agents[:]
         self._index_map: dict[str, int] = {
             agent.name: idx for idx, agent in enumerate(self.world.agents)
@@ -395,7 +395,7 @@ class BaseEnv(Generic[ActionType]):
         self.screen.fill((255, 255, 255))
 
         # update bounds to center around agent
-        all_poses = [entity.state.p_pos for entity in self.world.entities]
+        all_poses = [entity.state.pos for entity in self.world.entities]
         cam_range = np.max(np.abs(np.array(all_poses)))
 
         # The scaling factor is used for dynamic rescaling of the rendering - a.k.a Zoom In/Zoom Out effect

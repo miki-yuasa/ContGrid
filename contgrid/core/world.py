@@ -1,11 +1,12 @@
-from typing import Callable, Sequence
+from typing import Callable, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
+from pydantic import BaseModel, ConfigDict
 
 from .const import COLLISION_FORCE, CONTACT_MARGIN, DRAG
 from .entities import Entity, EntityShape, EntityState, EntityStateT, Landmark
-from .grid import Grid
+from .grid import DEFAULT_GRID, Grid
 
 
 class AgentState(
@@ -87,10 +88,26 @@ class Agent(Entity[AgentState]):  # properties of agent entities
         self.action_callback = action_callback
 
 
+class WorldConfig(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    grid: Grid = DEFAULT_GRID
+    dt: float = 0.1
+    dim_c: int = 0
+    drag: float = DRAG
+    collision_force: float = COLLISION_FORCE
+    contact_margin: float = CONTACT_MARGIN
+
+
+DEFAULT_WORLD_CONFIG = WorldConfig()
+
+WorldConfigT = TypeVar("WorldConfigT", bound=BaseModel)
+
+
 class World:  # multi-agent world
     def __init__(
         self,
-        grid: Grid,
+        grid: Grid = DEFAULT_GRID,
         dt: float = 0.1,
         dim_c: int = 0,
         drag: float = DRAG,
@@ -243,7 +260,7 @@ class World:  # multi-agent world
         # softmax penetration
         k: float = self.contact_margin
         penetration: float = np.logaddexp(0, -(dist - dist_min) / k) * k
-        force = self.contact_force * delta_pos / dist * penetration
+        force = self.collision_force * delta_pos / dist * penetration
         force_a: NDArray[np.float64] | None = +force if entity_a.movable else None
         force_b: NDArray[np.float64] | None = -force if entity_b.movable else None
         return [force_a, force_b]
