@@ -14,12 +14,12 @@ from .entities import EntityShape
 from .grid import Grid
 from .scenario import BaseScenario, ScenarioConfigT
 from .utils import AgentSelector
-from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfigT
+from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig
 
 ActionType = TypeVar("ActionType", bound=np.ndarray | int | None)
 
 
-class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
+class BaseEnv(Generic[ActionType, ScenarioConfigT]):
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "is_parallelizable": True,
@@ -33,8 +33,8 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
 
     def __init__(
         self,
-        scenario: BaseScenario[WorldConfigT, ScenarioConfigT],
-        world_config: WorldConfigT = DEFAULT_WORLD_CONFIG,
+        scenario: BaseScenario[ScenarioConfigT],
+        world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
         max_cycles: int = 100,
         render_mode: str | None = "rgb_array",
         action_mode: Literal[
@@ -50,8 +50,8 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
         self.viewer = None
         self.world: World = scenario.make_world(world_config)
         self.grid: Grid = self.world.grid
-        self.width = self.grid.width
-        self.height = self.grid.height
+        self.width = 700  # self.grid.width
+        self.height = 700  # self.grid.height
         self.screen = pygame.Surface([self.width, self.height])
         self.max_size = 1
         self.game_font = pygame.freetype.Font(
@@ -393,7 +393,7 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
         self.screen.fill((255, 255, 255))
 
         # update bounds to center around agent
-        all_poses = [entity.state.pos for entity in self.world.entities]
+        all_poses = [entity.state.pos for entity in self.world.all_entities]
         cam_range = np.max(np.abs(np.array(all_poses)))
 
         # The scaling factor is used for dynamic rescaling of the rendering - a.k.a Zoom In/Zoom Out effect
@@ -402,7 +402,7 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
 
         # update geometry and text positions
         text_line = 0
-        for entity in self.world.entities:
+        for entity in self.world.all_entities:
             # geometry
             x: float
             y: float
@@ -422,6 +422,8 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
                 radius = entity.size * 350 * scaling_factor
             else:
                 radius = entity.size * 350
+                if "wall" in entity.name:
+                    radius = entity.size * 350
 
             assert entity.color
             self._draw_shape(
@@ -433,9 +435,9 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
                 radius,
             )
 
-            assert 0 < x < self.width and 0 < y < self.height, (
-                f"Coordinates {(x, y)} are out of bounds."
-            )
+            # assert 0 < x < self.width and 0 < y < self.height, (
+            #     f"Coordinates {(x, y)} are out of bounds."
+            # )
 
             # text
             if isinstance(entity, Agent):
@@ -458,6 +460,8 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
                 )
                 text_line += 1
 
+            pygame.draw.circle(self.screen, (0, 0, 0), (0, 0), 2)
+
     def _draw_shape(
         self,
         screen: pygame.Surface,
@@ -471,7 +475,8 @@ class BaseEnv(Generic[ActionType, WorldConfigT, ScenarioConfigT]):
             pygame.draw.circle(screen, color, (x, y), size)
             pygame.draw.circle(screen, (0, 0, 0), (x, y), size, 1)  # borders
         elif shape == EntityShape.SQUARE:
-            pygame.draw.rect(screen, color, (x, y, size, size))
+            pygame.draw.rect(screen, color, (x, y - size, size, size))
+            pygame.draw.rect(screen, (0, 0, 0), (x, y - size, size, size), 1)  # borders
         else:
             raise ValueError(f"Unknown shape: {shape}")
 

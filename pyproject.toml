@@ -5,7 +5,12 @@ description = "Continuous space adaptation of grid-world envs in Gymnasium"
 readme = "README.md"
 authors = [{ name = "Mikihisa Yuasa", email = "myuasa2@illinois.edu" }]
 requires-python = ">=3.11"
-dependencies = ["gymnasium>=1.0.0", "pydantic>=2.0.0", "pygame>=2.5.0"]
+dependencies = [
+    "gymnasium>=1.0.0",
+ "matplotlib>=3.10.6",
+ "pydantic>=2.0.0",
+ "pygame>=2.5.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -16,3 +21,8 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["contgrid"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]

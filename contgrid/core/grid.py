@@ -2,13 +2,11 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
-Layout = list[str] | list[list[str]] | list[tuple[int, int]]
+Layout = list[str] | list[list[str]]
 
 
 class Grid(BaseModel):
     layout: Layout
-    width_cells: int
-    height_cells: int
     cell_size: float = 0.100
 
     @property
@@ -19,11 +17,17 @@ class Grid(BaseModel):
     def height(self) -> float:
         return self.height_cells * self.cell_size
 
+    @property
+    def width_cells(self) -> int:
+        return len(self.layout[0]) if self.layout else 0
+
+    @property
+    def height_cells(self) -> int:
+        return len(self.layout)
+
 
 DEFAULT_GRID = Grid(
-    layout=["#####", "#000#", "#000#", "#000#", "#####"],
-    width_cells=10,
-    height_cells=10,
+    layout=["#####", "#000#", "#0#0#", "#000#", "#####"],
     cell_size=0.100,
 )
 
@@ -64,10 +68,10 @@ class WallCollisionChecker:
             for c, char in enumerate(row_str):
                 if char == "#":
                     # Calculate continuous coordinates for the wall square
-                    wall_min_x = c * L
-                    wall_max_x = (c + 1) * L
-                    wall_min_y = (n_rows - 1 - r) * L
-                    wall_max_y = (n_rows - r) * L
+                    wall_min_x = (c - 0.5) * L
+                    wall_max_x = (c + 0.5) * L
+                    wall_min_y = (n_rows - 1 - r - 0.5) * L
+                    wall_max_y = (n_rows - r + 0.5) * L
 
                     walls.append((wall_min_x, wall_max_x, wall_min_y, wall_max_y))
                     wall_anchors.append((wall_min_x, wall_min_y))

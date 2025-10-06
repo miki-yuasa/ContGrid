@@ -6,22 +6,29 @@ from gymnasium import spaces
 from numpy.typing import NDArray
 
 from .entities import Landmark
-from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfigT
+from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig, WorldConfigT
 
 ScenarioConfigT = TypeVar("ScenarioConfigT")
 
 
 class BaseScenario(
-    ABC, Generic[WorldConfigT, ScenarioConfigT]
+    ABC, Generic[ScenarioConfigT]
 ):  # defines scenario upon which the world is built
     def __init__(self, config: ScenarioConfigT | None = None) -> None:
         self.config = config
 
     def make_world(
         self,
-        world_config: WorldConfigT = DEFAULT_WORLD_CONFIG,
+        world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
     ) -> World:  # create elements of the world
-        world = World(**world_config.model_dump())
+        world = World(
+            grid=world_config.grid,
+            dt=world_config.dt,
+            dim_c=world_config.dim_c,
+            contact_margin=world_config.contact_margin,
+            collision_force=world_config.collision_force,
+            drag=world_config.drag,
+        )
         # add agents
         world.agents = self.init_agents(world)
         # add landmarks

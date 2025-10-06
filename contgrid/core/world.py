@@ -154,10 +154,10 @@ class World:  # multi-agent world
         wall_collision_checker = WallCollisionChecker(grid.layout, grid.cell_size)
 
         walls: list[Landmark] = []
-        for i, (center_x, center_y) in enumerate(wall_collision_checker.wall_centers):
+        for i, (x, y) in enumerate(wall_collision_checker.wall_anchors):
             wall = Landmark(
                 name=f"wall_{i}",
-                size=self.grid.cell_size / 2,
+                size=self.grid.cell_size,
                 shape=EntityShape.SQUARE,
                 movable=False,
                 rotatable=False,
@@ -167,7 +167,7 @@ class World:  # multi-agent world
                 max_speed=None,
                 accel=None,
                 state=EntityState(
-                    pos=np.array([center_x, center_y], dtype=np.float64),
+                    pos=np.array([x, y], dtype=np.float64),
                     vel=None,
                     rot=0.0,
                     ang_vel=0.0,
@@ -182,6 +182,10 @@ class World:  # multi-agent world
     @property
     def entities(self) -> list[Agent | Landmark]:
         return self.agents + self.landmarks
+
+    @property
+    def all_entities(self) -> list[Agent | Landmark]:
+        return self.agents + self.landmarks + self.walls
 
     # return all agents controllable by external policies
     @property
@@ -239,14 +243,14 @@ class World:  # multi-agent world
                 if b <= a:
                     continue
                 [f_a, f_b] = self.get_collision_force(entity_a, entity_b)
-                if f_a:
+                if f_a is not None:
                     a_forces = new_forces[a]
-                    if not a_forces:
+                    if a_forces is None:
                         a_forces = np.array(0.0, dtype=np.float64)
                     new_forces[a] = f_a + a_forces
-                if f_b:
+                if f_b is not None:
                     b_forces = new_forces[b]
-                    if not b_forces:
+                    if b_forces is None:
                         b_forces = np.array(0.0, dtype=np.float64)
                     new_forces[b] = f_b + b_forces
         return new_forces
@@ -258,7 +262,7 @@ class World:  # multi-agent world
                 continue
             entity.state.pos += entity.state.vel * self.dt
             entity.state.vel = entity.state.vel * (1 - self.drag)
-            if force:
+            if force is not None:
                 entity.state.vel += (force / entity.mass) * self.dt
             if entity.max_speed:
                 speed = np.sqrt(

@@ -8,7 +8,7 @@ CONTACT_MARGIN: float = 1e-3
 ALPHABET: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
-class Color(Enum, RGB):
+class Color(RGB, Enum):
     RED = (228, 3, 3)
     ORANGE = (255, 140, 0)
     YELLOW = (255, 237, 0)
