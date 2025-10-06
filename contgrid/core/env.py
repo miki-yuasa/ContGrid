@@ -1,12 +1,14 @@
+import io
 import os
 from typing import Any, Generic, Literal, TypeVar
 
 import gymnasium
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 import numpy as np
-import pygame
-import pygame.freetype
 from gymnasium import spaces
 from gymnasium.utils import seeding
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from numpy.typing import NDArray
 
 from .const import ALPHABET, Color
@@ -46,17 +48,14 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         super().__init__()
 
         self.render_mode = render_mode
-        pygame.init()
         self.viewer = None
         self.world: World = scenario.make_world(world_config)
         self.grid: Grid = self.world.grid
         self.width = 700  # self.grid.width
         self.height = 700  # self.grid.height
-        self.screen = pygame.Surface([self.width, self.height])
+        self.fig = None
+        self.ax = None
         self.max_size = 1
-        self.game_font = pygame.freetype.Font(
-            os.path.join(os.path.dirname(__file__), "secrcode.ttf"), 24
-        )
 
         # Set up the drawing window
 
@@ -361,9 +360,17 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
             self._cumulative_rewards[agent] += reward
 
     def enable_render(self, mode: str = "human") -> None:
-        if not self.renderOn and mode == "human" and self.screen:
-            self.screen = pygame.display.set_mode(self.screen.get_size())
-            self.clock = pygame.time.Clock()
+        if not self.renderOn:
+            if self.fig is None:
+                self.fig, self.ax = plt.subplots(
+                    figsize=(self.width / 100, self.height / 100), dpi=100
+                )
+                self.ax.set_xlim(0, self.width)
+                self.ax.set_ylim(0, self.height)
+                self.ax.set_aspect("equal")
+                self.ax.axis("off")  # Remove axes for clean rendering
+            if mode == "human":
+                plt.ion()  # Turn on interactive mode
             self.renderOn = True
 
     def render(self):
@@ -374,31 +381,45 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
             return
 
         self.enable_render(self.render_mode)
-        assert self.screen
+        assert self.fig is not None and self.ax is not None
 
         self.draw()
+        # Tight layout often produces better results
+        self.fig.tight_layout(pad=0)
+        # Save the plot for debug
         if self.render_mode == "rgb_array":
-            observation = np.array(pygame.surfarray.pixels3d(self.screen))
-            return np.transpose(observation, axes=(1, 0, 2))
+            # Convert matplotlib figure to numpy array
+            canvas = FigureCanvasAgg(self.fig)
+            canvas.draw()
+            buf = canvas.buffer_rgba()
+            rgb_array = np.asarray(buf)[:, :, :3]  # Remove alpha channel
+            return rgb_array
         elif self.render_mode == "human":
-            pygame.display.flip()
-            self.clock.tick(self.metadata["render_fps"])
+            plt.draw()
+            plt.pause(1.0 / self.metadata["render_fps"])
             return
 
     def draw(self, alphabet: str = ALPHABET):
-        # clear screen
-        assert self.screen, (
+        # clear axes
+        assert self.ax is not None, (
             "Call enable_render() or set render_mode to human or rgb_array"
         )
-        self.screen.fill((255, 255, 255))
-
         # update bounds to center around agent
         all_poses = [entity.state.pos for entity in self.world.all_entities]
-        cam_range = np.max(np.abs(np.array(all_poses)))
+
+        # Find the limits of the environment
+        all_poses_np = np.array(all_poses)
+        x_min, y_min = np.min(all_poses_np, axis=0)
+
+        self.ax.clear()
+        self.ax.set_xlim(x_min, x_min + self.grid.width)
+        self.ax.set_ylim(y_min, y_min + self.grid.height)
+        self.ax.set_aspect("equal")
+        self.ax.axis("off")
+        self.ax.set_facecolor("white")
 
         # The scaling factor is used for dynamic rescaling of the rendering - a.k.a Zoom In/Zoom Out effect
         # The 0.9 is a factor to keep the entities from appearing "too" out-of-bounds
-        scaling_factor = 0.9 * self.original_cam_range / cam_range
 
         # update geometry and text positions
         text_line = 0
@@ -407,37 +428,24 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
             x: float
             y: float
             x, y = entity.state.pos
-            y *= (
-                -1
-            )  # this makes the display mimic the old pyglet setup (ie. flips image)
-            x = (
-                (x / cam_range) * self.width // 2 * 0.9
-            )  # the .9 is just to keep entities from appearing "too" out-of-bounds
-            y = (y / cam_range) * self.height // 2 * 0.9
-            x += self.width // 2
-            y += self.height // 2
 
             # 350 is an arbitrary scale factor to get pygame to render similar sizes as pyglet
-            if self.dynamic_rescaling:
-                radius = entity.size * 350 * scaling_factor
-            else:
-                radius = entity.size * 350
-                if "wall" in entity.name:
-                    radius = entity.size * 350
+            radius = entity.size
+            # if self.dynamic_rescaling:
+            #     radius = entity.size * 350 * scaling_factor
+            # else:
+            #     radius = entity.size * 350
+            #     if "wall" in entity.name:
+            #         radius = entity.size * 350
 
             assert entity.color
             self._draw_shape(
-                self.screen,
                 entity.shape,
                 entity.color,
                 x,
                 y,
                 radius,
             )
-
-            # assert 0 < x < self.width and 0 < y < self.height, (
-            #     f"Coordinates {(x, y)} are out of bounds."
-            # )
 
             # text
             if isinstance(entity, Agent):
@@ -455,32 +463,50 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
                 message = entity.name + " sends " + word + "   "
                 message_x_pos = self.width * 0.05
                 message_y_pos = self.height * 0.95 - (self.height * 0.05 * text_line)
-                self.game_font.render_to(
-                    self.screen, (message_x_pos, message_y_pos), message, (0, 0, 0)
+                self.ax.text(
+                    message_x_pos, message_y_pos, message, fontsize=12, color="black"
                 )
                 text_line += 1
 
-            pygame.draw.circle(self.screen, (0, 0, 0), (0, 0), 2)
+        # Draw center circle (origin marker)
+        center_circle = patches.Circle(
+            (self.width // 2, self.height // 2), 2, color="black"
+        )
+        self.ax.add_patch(center_circle)
 
     def _draw_shape(
         self,
-        screen: pygame.Surface,
         shape: EntityShape,
         color: Color,
         x: float,
         y: float,
         size: float,
     ):
+        # Convert color tuple to matplotlib-compatible format (0-1 range)
+        color_normalized = tuple(c / 255.0 for c in color)
+
         if shape == EntityShape.CIRCLE:
-            pygame.draw.circle(screen, color, (x, y), size)
-            pygame.draw.circle(screen, (0, 0, 0), (x, y), size, 1)  # borders
+            # Draw filled circle
+            circle = patches.Circle(
+                (x, y), size, facecolor=color_normalized, edgecolor="black", linewidth=1
+            )
+            self.ax.add_patch(circle)
         elif shape == EntityShape.SQUARE:
-            pygame.draw.rect(screen, color, (x, y - size, size, size))
-            pygame.draw.rect(screen, (0, 0, 0), (x, y - size, size, size), 1)  # borders
+            # Draw filled rectangle (square)
+            rect = patches.Rectangle(
+                (x, y),
+                size,
+                size,
+                facecolor=color_normalized,
+                edgecolor="black",
+                linewidth=1,
+            )
+            self.ax.add_patch(rect)
         else:
             raise ValueError(f"Unknown shape: {shape}")
 
     def close(self):
-        if self.screen:
-            pygame.quit()
-            self.screen = None
+        if self.fig is not None:
+            plt.close(self.fig)
+            self.fig = None
+            self.ax = None

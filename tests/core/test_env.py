@@ -1,8 +1,8 @@
 import os
 
 import numpy as np
-import pygame
 from gymnasium import spaces
+from PIL import Image
 
 from contgrid.core.const import Color
 from contgrid.core.entities import EntityState, Landmark
@@ -18,7 +18,7 @@ class SimpleScenario(BaseScenario[None]):
         """Initialize a single agent in the world"""
         agent = Agent(
             name="agent_0",
-            size=0.05,
+            size=0.025,
             color=Color.BLUE,
             state=AgentState(
                 pos=np.array([10, 0.19], dtype=np.float64),
@@ -31,7 +31,7 @@ class SimpleScenario(BaseScenario[None]):
         """Initialize a single landmark in the world"""
         landmark = Landmark(
             name="landmark_0",
-            size=0.1,
+            size=0.03,
             color=Color.GREEN,
             state=EntityState(
                 pos=np.array([0.2, 0.3], dtype=np.float64),
@@ -43,7 +43,7 @@ class SimpleScenario(BaseScenario[None]):
     def reset_agents(self, world: World, np_random) -> list[Agent]:
         """Reset agent positions"""
         for agent in world.agents:
-            agent.state.pos = np.array([0.0, 0.0], dtype=np.float64)
+            agent.state.pos = np.array([0.1, 0.1], dtype=np.float64)
             agent.state.vel = np.array([0.0, 0.0], dtype=np.float64)
         return world.agents
 
@@ -95,20 +95,17 @@ class TestEnvironmentRendering:
         )
         assert rendered_image.shape[2] == 3, "Image should have 3 color channels (RGB)"
 
-        # Convert numpy array to pygame surface for saving
+        # Save numpy array as PNG using PIL
         # rendered_image is in format (height, width, channels)
         height, width, channels = rendered_image.shape
 
-        # Create pygame surface from the numpy array
-        surface = pygame.Surface((width, height))
-        # Convert from RGB to the format pygame expects
-        pygame_array = np.transpose(rendered_image, (1, 0, 2))
-        pygame.surfarray.blit_array(surface, pygame_array)
+        # Create PIL Image from numpy array
+        pil_image = Image.fromarray(rendered_image.astype(np.uint8))
 
         # Save as PNG
         output_path = os.path.join("tests", "out", "plots", "default_environment.png")
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        pygame.image.save(surface, output_path)
+        pil_image.save(output_path)
 
         # Verify file was created
         assert os.path.exists(output_path), (
@@ -120,7 +117,6 @@ class TestEnvironmentRendering:
 
         # Clean up
         env.close()
-        pygame.quit()
 
         print(f"Successfully rendered and saved environment to {output_path}")
 
@@ -154,16 +150,13 @@ class TestEnvironmentRendering:
 
         # Save stepped environment
         height, width, channels = rendered_image.shape
-        surface = pygame.Surface((width, height))
-        pygame_array = np.transpose(rendered_image, (1, 0, 2))
-        pygame.surfarray.blit_array(surface, pygame_array)
+        pil_image = Image.fromarray(rendered_image.astype(np.uint8))
 
         output_path = os.path.join("tests", "out", "plots", "stepped_environment.png")
-        pygame.image.save(surface, output_path)
+        pil_image.save(output_path)
 
         assert os.path.exists(output_path)
         env.close()
-        pygame.quit()
 
         print(f"Successfully rendered stepped environment to {output_path}")
 

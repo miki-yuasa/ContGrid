@@ -7,9 +7,9 @@ authors = [{ name = "Mikihisa Yuasa", email = "myuasa2@illinois.edu" }]
 requires-python = ">=3.11"
 dependencies = [
     "gymnasium>=1.0.0",
- "matplotlib>=3.10.6",
- "pydantic>=2.0.0",
- "pygame>=2.5.0",
+    "matplotlib>=3.0.0",
+    "pydantic>=2.0.0",
+    "pillow>=10.0.0",
 ]
 
 [build-system]
@@ -23,6 +23,4 @@ allow-direct-references = true
 packages = ["contgrid"]
 
 [dependency-groups]
-dev = [
-    "pytest>=8.4.2",
-]
+dev = ["pytest>=8.4.2"]
