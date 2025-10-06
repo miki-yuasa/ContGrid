@@ -1,5 +1,3 @@
-import io
-import os
 from typing import Any, Generic, Literal, TypeVar
 
 import gymnasium
@@ -10,6 +8,7 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from numpy.typing import NDArray
+from pydantic import BaseModel
 
 from .const import ALPHABET, Color
 from .entities import EntityShape
@@ -19,6 +18,17 @@ from .utils import AgentSelector
 from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig
 
 ActionType = TypeVar("ActionType", bound=np.ndarray | int | None)
+
+
+class RenderConfig(BaseModel):
+    render_mode: Literal["human", "rgb_array"] = "rgb_array"
+    draw_grid: bool = True
+    width_px: int = 700
+    height_px: int = 700
+    dpi: int = 300
+
+
+DEFAULT_RENDER_CONFIG = RenderConfig()
 
 
 class BaseEnv(Generic[ActionType, ScenarioConfigT]):
@@ -38,23 +48,23 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         scenario: BaseScenario[ScenarioConfigT],
         world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
         max_cycles: int = 100,
-        render_mode: str | None = "rgb_array",
+        render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
         action_mode: Literal[
             "discrete", "continuous", "continuous-minimal"
         ] = "continuous-minimal",
         local_ratio: float | None = None,
-        dynamic_rescaling: bool = False,
         verbose: bool = False,
     ):
         super().__init__()
 
-        self.render_mode = render_mode
+        self.render_config: RenderConfig = render_config
+        self.render_mode = render_config.render_mode
         self.viewer = None
         self.world: World = scenario.make_world(world_config, verbose)
         self.grid: Grid = self.world.grid
-        self.width = 700  # self.grid.width
-        self.height = 700  # self.grid.height
-        self.dpi = 300
+        self.width = render_config.width_px
+        self.height = render_config.height_px
+        self.dpi = render_config.dpi
         self.fig = None
         self.ax = None
         self.max_size = 1
@@ -71,7 +81,6 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
             action_mode
         )
         self.local_ratio = local_ratio
-        self.dynamic_rescaling = dynamic_rescaling
 
         self.scenario.reset_world(self.world, self.np_random)
 
@@ -368,8 +377,6 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
                 self.fig, self.ax = plt.subplots(
                     figsize=(self.width / 100, self.height / 100), dpi=self.dpi
                 )
-                # self.ax.set_xlim(0, self.width)
-                # self.ax.set_ylim(0, self.height)
                 self.ax.set_aspect("equal")
                 self.ax.axis("off")  # Remove axes for clean rendering
             if mode == "human":
@@ -420,6 +427,14 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         self.ax.set_aspect("equal")
         self.ax.axis("off")
         self.ax.set_facecolor("white")
+
+        # If draw_grid is enabled, draw the grid lines
+        if self.render_config.draw_grid:
+            # Draw grid lines
+            for x in range(self.grid.width_cells + 1):
+                self.ax.axvline(x=x_min + x, color="grey", linewidth=0.5)
+            for y in range(self.grid.height_cells + 1):
+                self.ax.axhline(y=y_min + y, color="grey", linewidth=0.5)
 
         # The scaling factor is used for dynamic rescaling of the rendering - a.k.a Zoom In/Zoom Out effect
         # The 0.9 is a factor to keep the entities from appearing "too" out-of-bounds

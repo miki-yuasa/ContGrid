@@ -80,7 +80,7 @@ class TestEnvironmentRendering:
         scenario = SimpleScenario()
 
         # Create environment with rgb_array render mode
-        env = BaseEnv(scenario=scenario, render_mode="rgb_array", max_cycles=10)
+        env = BaseEnv(scenario=scenario, max_cycles=10)
 
         # Reset environment
         env.reset(seed=42)
@@ -123,7 +123,7 @@ class TestEnvironmentRendering:
     def test_render_with_multiple_steps(self):
         """Test rendering environment after taking a few steps"""
         scenario = SimpleScenario()
-        env = BaseEnv(scenario=scenario, render_mode="rgb_array", max_cycles=10)
+        env = BaseEnv(scenario=scenario, max_cycles=10)
 
         # Reset environment
         env.reset(seed=42)
@@ -136,7 +136,7 @@ class TestEnvironmentRendering:
                 action_space = env.action_space(agent_name)
                 if hasattr(action_space, "sample"):
                     action = action_space.sample()
-                    action = np.array([-0, 10])  # Simple movement
+                    action = np.array([-2, 10])  # Simple movement
 
                 else:
                     action = np.array([0.1, 0.1])  # Simple movement
