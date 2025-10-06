@@ -53,6 +53,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         self.grid: Grid = self.world.grid
         self.width = 700  # self.grid.width
         self.height = 700  # self.grid.height
+        self.dpi = 300
         self.fig = None
         self.ax = None
         self.max_size = 1
@@ -363,10 +364,10 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         if not self.renderOn:
             if self.fig is None:
                 self.fig, self.ax = plt.subplots(
-                    figsize=(self.width / 100, self.height / 100), dpi=100
+                    figsize=(self.width / 100, self.height / 100), dpi=self.dpi
                 )
-                self.ax.set_xlim(0, self.width)
-                self.ax.set_ylim(0, self.height)
+                # self.ax.set_xlim(0, self.width)
+                # self.ax.set_ylim(0, self.height)
                 self.ax.set_aspect("equal")
                 self.ax.axis("off")  # Remove axes for clean rendering
             if mode == "human":
@@ -429,14 +430,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
             y: float
             x, y = entity.state.pos
 
-            # 350 is an arbitrary scale factor to get pygame to render similar sizes as pyglet
             radius = entity.size
-            # if self.dynamic_rescaling:
-            #     radius = entity.size * 350 * scaling_factor
-            # else:
-            #     radius = entity.size * 350
-            #     if "wall" in entity.name:
-            #         radius = entity.size * 350
 
             assert entity.color
             self._draw_shape(
@@ -467,12 +461,6 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
                     message_x_pos, message_y_pos, message, fontsize=12, color="black"
                 )
                 text_line += 1
-
-        # Draw center circle (origin marker)
-        center_circle = patches.Circle(
-            (self.width // 2, self.height // 2), 2, color="black"
-        )
-        self.ax.add_patch(center_circle)
 
     def _draw_shape(
         self,

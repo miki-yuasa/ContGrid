@@ -19,7 +19,7 @@ class SimpleScenario(BaseScenario[None]):
         agent = Agent(
             name="agent_0",
             size=0.025,
-            color=Color.BLUE,
+            color=Color.SKY_BLUE,
             state=AgentState(
                 pos=np.array([10, 0.19], dtype=np.float64),
                 vel=np.array([0.0, 0.0], dtype=np.float64),
@@ -136,8 +136,12 @@ class TestEnvironmentRendering:
                 action_space = env.action_space(agent_name)
                 if hasattr(action_space, "sample"):
                     action = action_space.sample()
-                else:
                     action = np.array([0.1, 0.1])  # Simple movement
+
+                else:
+                    action = np.array([0.01, 0.01])  # Simple movement
+
+                print(f"Step {step + 1}, Action: {action}")
 
                 env.step(action)
 

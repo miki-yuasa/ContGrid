@@ -106,6 +106,7 @@ class WorldConfig(BaseModel):
     drag: float = DRAG
     collision_force: float = COLLISION_FORCE
     contact_margin: float = CONTACT_MARGIN
+    verbose: bool = False
 
 
 DEFAULT_WORLD_CONFIG = WorldConfig()
@@ -122,6 +123,7 @@ class World:  # multi-agent world
         drag: float = DRAG,
         collision_force: float = COLLISION_FORCE,
         contact_margin: float = CONTACT_MARGIN,
+        verbose: bool = True,
     ):
         # list of agents and entities (can change at execution-time!)
         self.agents: list[Agent] = []
@@ -149,6 +151,9 @@ class World:  # multi-agent world
         self.wall_collision_checker: WallCollisionChecker
         self.walls: list[Landmark]
         self.wall_collision_checker, self.walls = self._init_walls(self.grid)
+
+        # verbosity
+        self.verbose: bool = verbose
 
     def _init_walls(self, grid: Grid) -> tuple[WallCollisionChecker, list[Landmark]]:
         wall_collision_checker = WallCollisionChecker(grid.layout, grid.cell_size)
@@ -210,6 +215,10 @@ class World:  # multi-agent world
         forces = self.apply_action_force(forces)
         # apply environment forces
         forces = self.apply_environment_force(forces)
+        # apply wall collision forces
+        forces = self.apply_wall_collision_forces(forces)
+        if self.verbose:
+            print(forces)
         # integrate physical state
         self.integrate_state(forces)
         # update agent state
@@ -253,6 +262,21 @@ class World:  # multi-agent world
                     if b_forces is None:
                         b_forces = np.array(0.0, dtype=np.float64)
                     new_forces[b] = f_b + b_forces
+        return new_forces
+
+    # apply wall collision forces
+    def apply_wall_collision_forces(
+        self, forces: list[None | NDArray[np.float64]]
+    ) -> list[None | NDArray[np.float64]]:
+        new_forces: list[None | NDArray[np.float64]] = [p for p in forces]
+        for i, entity in enumerate(self.entities):
+            if isinstance(entity, Agent):
+                f = self.get_wall_collision_force(entity)
+                if f is not None:
+                    entity_forces = new_forces[i]
+                    if entity_forces is None:
+                        entity_forces = np.array(0.0, dtype=np.float64)
+                    new_forces[i] = f + entity_forces
         return new_forces
 
     # integrate physical state
