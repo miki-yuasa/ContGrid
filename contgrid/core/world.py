@@ -147,16 +147,18 @@ class World:  # multi-agent world
         # grid size
         self.grid_size: float = self.grid.cell_size
 
+        # verbosity
+        self.verbose: bool = verbose
+
         # initialize wall collision checker and wall entities
         self.wall_collision_checker: WallCollisionChecker
         self.walls: list[Landmark]
         self.wall_collision_checker, self.walls = self._init_walls(self.grid)
 
-        # verbosity
-        self.verbose: bool = verbose
-
     def _init_walls(self, grid: Grid) -> tuple[WallCollisionChecker, list[Landmark]]:
-        wall_collision_checker = WallCollisionChecker(grid.layout, grid.cell_size)
+        wall_collision_checker = WallCollisionChecker(
+            grid.layout, grid.cell_size, self.verbose
+        )
 
         walls: list[Landmark] = []
         for i, (x, y) in enumerate(wall_collision_checker.wall_anchors):
@@ -218,7 +220,7 @@ class World:  # multi-agent world
         # apply wall collision forces
         forces = self.apply_wall_collision_forces(forces)
         if self.verbose:
-            print(forces)
+            print("forces:", forces)
         # integrate physical state
         self.integrate_state(forces)
         # update agent state
@@ -284,7 +286,25 @@ class World:  # multi-agent world
         for force, entity in zip(forces, self.entities):
             if not entity.movable:
                 continue
-            entity.state.pos += entity.state.vel * self.dt
+            new_pos = entity.state.pos + entity.state.vel * self.dt
+            if not self.grid.allow_wall_overlap:
+                # Clip new position to avoid wall collisions
+                clipped_pos = self.wall_collision_checker.clip_new_position(
+                    entity.size,
+                    self.contact_margin,
+                    tuple(entity.state.pos),
+                    tuple(new_pos),
+                )
+                if self.verbose:
+                    print(
+                        f"Entity {entity.name} "
+                        f"Old pos: {entity.state.pos}, New pos: {new_pos}, Clipped pos: {clipped_pos}"
+                    )
+                new_pos = clipped_pos
+            else:
+                pass
+
+            entity.state.pos = np.array(new_pos, dtype=np.float64)
             entity.state.vel = entity.state.vel * (1 - self.drag)
             if force is not None:
                 entity.state.vel += (force / entity.mass) * self.dt

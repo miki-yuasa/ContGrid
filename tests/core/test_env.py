@@ -136,7 +136,7 @@ class TestEnvironmentRendering:
                 action_space = env.action_space(agent_name)
                 if hasattr(action_space, "sample"):
                     action = action_space.sample()
-                    action = np.array([0.1, 0.1])  # Simple movement
+                    action = np.array([-0.5, 0.5])  # Simple movement
 
                 else:
                     action = np.array([0.01, 0.01])  # Simple movement
