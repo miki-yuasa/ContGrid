@@ -44,12 +44,13 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         ] = "continuous-minimal",
         local_ratio: float | None = None,
         dynamic_rescaling: bool = False,
+        verbose: bool = False,
     ):
         super().__init__()
 
         self.render_mode = render_mode
         self.viewer = None
-        self.world: World = scenario.make_world(world_config)
+        self.world: World = scenario.make_world(world_config, self.verbose)
         self.grid: Grid = self.world.grid
         self.width = 700  # self.grid.width
         self.height = 700  # self.grid.height
@@ -57,6 +58,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         self.fig = None
         self.ax = None
         self.max_size = 1
+        self.verbose: bool = verbose
 
         # Set up the drawing window
 

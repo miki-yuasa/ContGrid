@@ -20,6 +20,7 @@ class BaseScenario(
     def make_world(
         self,
         world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
+        verbose: bool = False,
     ) -> World:  # create elements of the world
         world = World(
             grid=world_config.grid,
@@ -28,6 +29,7 @@ class BaseScenario(
             contact_margin=world_config.contact_margin,
             collision_force=world_config.collision_force,
             drag=world_config.drag,
+            verbose=verbose,
         )
         # add agents
         world.agents = self.init_agents(world)

@@ -106,7 +106,6 @@ class WorldConfig(BaseModel):
     drag: float = DRAG
     collision_force: float = COLLISION_FORCE
     contact_margin: float = CONTACT_MARGIN
-    verbose: bool = False
 
 
 DEFAULT_WORLD_CONFIG = WorldConfig()
@@ -123,7 +122,7 @@ class World:  # multi-agent world
         drag: float = DRAG,
         collision_force: float = COLLISION_FORCE,
         contact_margin: float = CONTACT_MARGIN,
-        verbose: bool = True,
+        verbose: bool = False,
     ):
         # list of agents and entities (can change at execution-time!)
         self.agents: list[Agent] = []
