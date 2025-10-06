@@ -135,7 +135,7 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
     def __init__(
         self,
         name: str = "",
-        size: float = 0.05,
+        size: float = 0.5,
         shape: EntityShape = EntityShape.CIRCLE,
         movable: bool = False,
         rotatable: bool = False,

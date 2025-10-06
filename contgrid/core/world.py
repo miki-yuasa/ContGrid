@@ -47,7 +47,7 @@ class Agent(Entity[AgentState]):  # properties of agent entities
     def __init__(
         self,
         name: str = "",
-        size: float = 0.05,
+        size: float = 0.25,
         shape: EntityShape = EntityShape.CIRCLE,
         movable: bool = True,
         rotatable: bool = False,

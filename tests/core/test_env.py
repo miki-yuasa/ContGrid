@@ -18,7 +18,7 @@ class SimpleScenario(BaseScenario[None]):
         """Initialize a single agent in the world"""
         agent = Agent(
             name="agent_0",
-            size=0.025,
+            size=0.25,
             color=Color.SKY_BLUE,
             state=AgentState(
                 pos=np.array([10, 0.19], dtype=np.float64),
@@ -31,10 +31,10 @@ class SimpleScenario(BaseScenario[None]):
         """Initialize a single landmark in the world"""
         landmark = Landmark(
             name="landmark_0",
-            size=0.03,
+            size=0.5,
             color=Color.GREEN,
             state=EntityState(
-                pos=np.array([0.2, 0.3], dtype=np.float64),
+                pos=np.array([2, 3], dtype=np.float64),
                 vel=np.array([0.0, 0.0], dtype=np.float64),
             ),
         )
@@ -43,14 +43,14 @@ class SimpleScenario(BaseScenario[None]):
     def reset_agents(self, world: World, np_random) -> list[Agent]:
         """Reset agent positions"""
         for agent in world.agents:
-            agent.state.pos = np.array([0.1, 0.1], dtype=np.float64)
+            agent.state.pos = np.array([1, 1], dtype=np.float64)
             agent.state.vel = np.array([0.0, 0.0], dtype=np.float64)
         return world.agents
 
     def reset_landmarks(self, world: World, np_random) -> list[Landmark]:
         """Reset landmark positions"""
         for landmark in world.landmarks:
-            landmark.state.pos = np.array([0.2, 0.3], dtype=np.float64)
+            landmark.state.pos = np.array([2, 3], dtype=np.float64)
             landmark.state.vel = np.array([0.0, 0.0], dtype=np.float64)
         return world.landmarks
 
@@ -136,10 +136,10 @@ class TestEnvironmentRendering:
                 action_space = env.action_space(agent_name)
                 if hasattr(action_space, "sample"):
                     action = action_space.sample()
-                    action = np.array([-0.5, 0.5])  # Simple movement
+                    action = np.array([-0, 10])  # Simple movement
 
                 else:
-                    action = np.array([0.01, 0.01])  # Simple movement
+                    action = np.array([0.1, 0.1])  # Simple movement
 
                 print(f"Step {step + 1}, Action: {action}")
 

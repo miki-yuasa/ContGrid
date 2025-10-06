@@ -7,7 +7,7 @@ Layout = list[str] | list[list[str]]
 
 class Grid(BaseModel):
     layout: Layout
-    cell_size: float = 0.100
+    cell_size: float = 1.0
     allow_wall_overlap: bool = False
 
     @property
@@ -29,7 +29,7 @@ class Grid(BaseModel):
 
 DEFAULT_GRID = Grid(
     layout=["#####", "#000#", "#0#0#", "#000#", "#####"],
-    cell_size=0.100,
+    cell_size=1,
 )
 
 

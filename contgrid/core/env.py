@@ -50,7 +50,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
 
         self.render_mode = render_mode
         self.viewer = None
-        self.world: World = scenario.make_world(world_config, self.verbose)
+        self.world: World = scenario.make_world(world_config, verbose)
         self.grid: Grid = self.world.grid
         self.width = 700  # self.grid.width
         self.height = 700  # self.grid.height
