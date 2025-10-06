@@ -35,6 +35,30 @@ class Action:  # action of the agent
         self.c: NDArray[np.float64] = np.array(0.0, dtype=np.float64)
 
 
+class AgentConfig(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: str = ""
+    size: float = 0.25
+    shape: EntityShape = EntityShape.CIRCLE
+    movable: bool = True
+    rotatable: bool = False
+    collide: bool = True
+    density: float = 25
+    color: str = Color.SKY_BLUE.name
+    max_speed: float | None = None
+    accel: float | None = None
+    state: AgentState = AgentState()
+    initial_mass: float = 1
+    silent: bool = True
+    blind: bool = False
+    u_noise: float | None = None
+    c_noise: float | None = None
+    u_range: float = 10.0
+    action: Action = Action()
+    action_callback: Callable[["Agent", "World"], Action] | None = None
+
+
 class Agent(Entity[AgentState]):  # properties of agent entities
     silent: bool
     blind: bool
@@ -53,7 +77,7 @@ class Agent(Entity[AgentState]):  # properties of agent entities
         rotatable: bool = False,
         collide: bool = True,
         density: float = 25,
-        color: Color = Color.BLUE,
+        color: str = Color.SKY_BLUE.name,
         max_speed: float | None = None,
         accel: float | None = None,
         state: AgentState = AgentState(),
@@ -62,7 +86,7 @@ class Agent(Entity[AgentState]):  # properties of agent entities
         blind: bool = False,
         u_noise: float | None = None,
         c_noise: float | None = None,
-        u_range: float = 1.0,
+        u_range: float = 10.0,
         action: Action = Action(),
         action_callback: Callable[["Agent", "World"], Action] | None = None,
     ):
@@ -169,7 +193,7 @@ class World:  # multi-agent world
                 rotatable=False,
                 collide=True,
                 density=1000,
-                color=Color.GREY,
+                color=Color.GREY.name,
                 max_speed=None,
                 accel=None,
                 state=EntityState(

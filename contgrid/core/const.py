@@ -2,9 +2,11 @@ from enum import Enum
 
 from .typing import RGB
 
-DRAG: float = 0.25
-COLLISION_FORCE: float = 1e2
-CONTACT_MARGIN: float = 1e-3
+# Grid length is 1[m]
+
+DRAG: float = 1
+COLLISION_FORCE: float = 1e3
+CONTACT_MARGIN: float = 1e-2
 ALPHABET: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 

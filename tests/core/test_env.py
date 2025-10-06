@@ -8,7 +8,7 @@ from contgrid.core.const import Color
 from contgrid.core.entities import EntityState, Landmark
 from contgrid.core.env import BaseEnv
 from contgrid.core.scenario import BaseScenario
-from contgrid.core.world import Agent, AgentState, World, WorldConfig
+from contgrid.core.world import Agent, AgentState, World
 
 
 class SimpleScenario(BaseScenario[None]):
@@ -19,7 +19,7 @@ class SimpleScenario(BaseScenario[None]):
         agent = Agent(
             name="agent_0",
             size=0.25,
-            color=Color.SKY_BLUE,
+            color=Color.SKY_BLUE.name,
             state=AgentState(
                 pos=np.array([10, 0.19], dtype=np.float64),
                 vel=np.array([0.0, 0.0], dtype=np.float64),
@@ -32,7 +32,7 @@ class SimpleScenario(BaseScenario[None]):
         landmark = Landmark(
             name="landmark_0",
             size=0.5,
-            color=Color.GREEN,
+            color=Color.GREEN.name,
             state=EntityState(
                 pos=np.array([2, 3], dtype=np.float64),
                 vel=np.array([0.0, 0.0], dtype=np.float64),
@@ -136,7 +136,7 @@ class TestEnvironmentRendering:
                 action_space = env.action_space(agent_name)
                 if hasattr(action_space, "sample"):
                     action = action_space.sample()
-                    action = np.array([-2, 10])  # Simple movement
+                    # action = np.array([-3, 10])  # Simple movement
 
                 else:
                     action = np.array([0.1, 0.1])  # Simple movement

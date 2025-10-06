@@ -96,7 +96,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         rotatable: bool = False,
         collide: bool = True,
         density: float = 25.0,
-        color: Color = Color.WHITE,
+        color: str = Color.WHITE.name,
         max_speed: float | None = None,
         accel: float | None = None,
         state: EntityStateT = EntityState(),
@@ -117,7 +117,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         # material density (affects mass)
         self.density = density
         # color
-        self.color = color
+        self.color = Color[color]
         # max speed and accel
         self.max_speed = max_speed
         self.accel = accel
@@ -141,7 +141,7 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
         rotatable: bool = False,
         collide: bool = True,
         density: float = 25,
-        color: Color = Color.GREEN,
+        color: str = Color.GREEN.name,
         max_speed: float | None = None,
         accel: float | None = None,
         state: EntityState = EntityState(),

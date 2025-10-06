@@ -1,3 +1,4 @@
+from enum import StrEnum
 from typing import Any, Generic, Literal, TypeVar
 
 import gymnasium
@@ -8,14 +9,14 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from numpy.typing import NDArray
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .const import ALPHABET, Color
 from .entities import EntityShape
 from .grid import Grid
 from .scenario import BaseScenario, ScenarioConfigT
 from .utils import AgentSelector
-from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig
+from .world import Agent, World
 
 ActionType = TypeVar("ActionType", bound=np.ndarray | int | None)
 
@@ -31,6 +32,23 @@ class RenderConfig(BaseModel):
 DEFAULT_RENDER_CONFIG = RenderConfig()
 
 
+class ActionMode(StrEnum):
+    DISCRETE = "discrete"
+    CONTINUOUS = "continuous"
+    CONTINUOUS_MINIMAL = "continuous-minimal"
+
+
+class EnvConfig(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    scenario: BaseScenario
+    max_cycles: int = 100
+    render_config: RenderConfig = DEFAULT_RENDER_CONFIG
+    action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value
+    local_ratio: float | None = None
+    verbose: bool = False
+
+
 class BaseEnv(Generic[ActionType, ScenarioConfigT]):
     metadata = {
         "render_modes": ["human", "rgb_array"],
@@ -38,20 +56,17 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         "render_fps": 10,
     }
 
-    continuous_modes: list[Literal["continuous", "continuous-minimal"]] = [
-        "continuous",
-        "continuous-minimal",
+    continuous_modes: list[ActionMode] = [
+        ActionMode.CONTINUOUS,
+        ActionMode.CONTINUOUS_MINIMAL,
     ]
 
     def __init__(
         self,
         scenario: BaseScenario[ScenarioConfigT],
-        world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
         max_cycles: int = 100,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
-        action_mode: Literal[
-            "discrete", "continuous", "continuous-minimal"
-        ] = "continuous-minimal",
+        action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value,
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
@@ -60,7 +75,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         self.render_config: RenderConfig = render_config
         self.render_mode = render_config.render_mode
         self.viewer = None
-        self.world: World = scenario.make_world(world_config, verbose)
+        self.world: World = scenario.make_world(verbose)
         self.grid: Grid = self.world.grid
         self.width = render_config.width_px
         self.height = render_config.height_px
@@ -77,9 +92,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
 
         self.max_cycles = max_cycles
         self.scenario = scenario
-        self.action_mode: Literal["discrete", "continuous", "continuous-minimal"] = (
-            action_mode
-        )
+        self.action_mode: ActionMode = ActionMode(action_mode)
         self.local_ratio = local_ratio
 
         self.scenario.reset_world(self.world, self.np_random)
@@ -115,11 +128,11 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
             match self.action_mode:
                 case "continuous":
                     self.action_spaces[agent.name] = spaces.Box(
-                        low=0, high=1, shape=(space_dim,)
+                        low=0, high=agent.u_range, shape=(space_dim,)
                     )
                 case "continuous-minimal":
                     self.action_spaces[agent.name] = spaces.Box(
-                        low=-1, high=1, shape=(space_dim,)
+                        low=-agent.u_range, high=agent.u_range, shape=(space_dim,)
                     )
                 case "discrete":
                     self.action_spaces[agent.name] = spaces.Discrete(space_dim)
@@ -146,9 +159,9 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
 
         self.current_actions: list[ActionType | None] = [None] * self.num_agents
 
-    def movable_agent_action_dim(self, action_mode: str) -> int:
-        if action_mode == "continuous-minimal":
-            return self.world.dim_p * 2
+    def movable_agent_action_dim(self, action_mode: ActionMode) -> int:
+        if action_mode == ActionMode.CONTINUOUS_MINIMAL:
+            return self.world.dim_p
         else:
             return self.world.dim_p * 2 + 1
 
@@ -489,6 +502,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
     ):
         # Convert color tuple to matplotlib-compatible format (0-1 range)
         color_normalized = tuple(c / 255.0 for c in color)
+        assert self.ax
 
         if shape == EntityShape.CIRCLE:
             # Draw filled circle

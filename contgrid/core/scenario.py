@@ -6,7 +6,7 @@ from gymnasium import spaces
 from numpy.typing import NDArray
 
 from .entities import Landmark
-from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig, WorldConfigT
+from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig
 
 ScenarioConfigT = TypeVar("ScenarioConfigT")
 
@@ -14,14 +14,19 @@ ScenarioConfigT = TypeVar("ScenarioConfigT")
 class BaseScenario(
     ABC, Generic[ScenarioConfigT]
 ):  # defines scenario upon which the world is built
-    def __init__(self, config: ScenarioConfigT | None = None) -> None:
+    def __init__(
+        self,
+        config: ScenarioConfigT | None = None,
+        world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
+    ) -> None:
         self.config = config
+        self.world_config = world_config
 
     def make_world(
         self,
-        world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
         verbose: bool = False,
     ) -> World:  # create elements of the world
+        world_config = self.world_config
         world = World(
             grid=world_config.grid,
             dt=world_config.dt,
