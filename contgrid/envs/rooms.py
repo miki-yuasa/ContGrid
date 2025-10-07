@@ -186,6 +186,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             for i, config in enumerate(self.config.spawn_config.holes)
         ]
         landmarks = [self.goal] + self.lavas + self.holes
+
         return landmarks
 
     def reset_agents(self, world: World, np_random: np.random.Generator) -> list[Agent]:
@@ -234,6 +235,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         self.goal_pos: NDArray[np.float64] = np.array(
             (self.goal.state.pos[0], self.goal.state.pos[1]), dtype=np.float64
         )
+        self.world_pos: NDArray[np.float64] = np.array(
+            world.wall_collision_checker.wall_centers, dtype=np.float64
+        )
         return world.landmarks
 
     def get_closest(
@@ -270,7 +274,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["goal_pos"] = self.goal_pos.copy()
         obs["lava_pos"] = self.lava_pos.copy()
         obs["hole_pos"] = self.hole_pos.copy()
-        obs["wall_pos"] = world.wall_collision_checker.wall_centers
+        obs["wall_pos"] = self.world_pos.copy()
         # Distance to the goal
         obs["goal_dist"] = np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
         # Distance to the closest lava
@@ -279,9 +283,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         # Distance to the closest hole
         hole_dist, _ = self.get_closest(agent.state.pos, self.hole_pos)
         obs["hole_dist"] = np.array([hole_dist], dtype=np.float64)
-        wall_dist, _ = self.get_closest(
-            agent.state.pos, np.array(world.wall_collision_checker.wall_centers)
-        )
+        wall_dist, _ = self.get_closest(agent.state.pos, self.world_pos)
         obs["wall_dist"] = np.array([wall_dist], dtype=np.float64)
         return obs
 
