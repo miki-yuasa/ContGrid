@@ -270,6 +270,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["goal_pos"] = self.goal_pos.copy()
         obs["lava_pos"] = self.lava_pos.copy()
         obs["hole_pos"] = self.hole_pos.copy()
+        obs["wall_pos"] = world.wall_collision_checker.wall_centers
         # Distance to the goal
         obs["goal_dist"] = np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
         # Distance to the closest lava
@@ -278,6 +279,10 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         # Distance to the closest hole
         hole_dist, _ = self.get_closest(agent.state.pos, self.hole_pos)
         obs["hole_dist"] = np.array([hole_dist], dtype=np.float64)
+        wall_dist, _ = self.get_closest(
+            agent.state.pos, np.array(world.wall_collision_checker.wall_centers)
+        )
+        obs["wall_dist"] = np.array([wall_dist], dtype=np.float64)
         return obs
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
@@ -314,6 +319,19 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                     else np.array([], dtype=np.float64),
                     dtype=np.float64,
                 ),
+                "wall_pos": spaces.Box(
+                    low=np.array(
+                        [low_bound] * len(world.wall_collision_checker.wall_centers)
+                    )
+                    if len(world.wall_collision_checker.wall_centers) > 0
+                    else np.array([], dtype=np.float64),
+                    high=np.array(
+                        [high_bound] * len(world.wall_collision_checker.wall_centers)
+                    )
+                    if len(world.wall_collision_checker.wall_centers) > 0
+                    else np.array([], dtype=np.float64),
+                    dtype=np.float64,
+                ),
                 "goal_dist": spaces.Box(
                     low=0.0, high=max_dist, shape=(1,), dtype=np.float64
                 ),
@@ -321,6 +339,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                     low=0.0, high=max_dist, shape=(1,), dtype=np.float64
                 ),
                 "hole_dist": spaces.Box(
+                    low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                ),
+                "wall_dist": spaces.Box(
                     low=0.0, high=max_dist, shape=(1,), dtype=np.float64
                 ),
             }
