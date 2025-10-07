@@ -417,14 +417,11 @@ class RoomsEnv(
         render_mode: str | None = None,
         verbose: bool = False,
     ) -> None:
-        if render_mode is not None:
-            render_config = render_config.model_copy(
-                update={"render_mode": render_mode}
-            )
         scenario = RoomsScenario(scenario_config, world_config)
         super().__init__(
             scenario,
             render_config=render_config,
+            render_mode=render_mode,
             local_ratio=None,
             verbose=verbose,
         )

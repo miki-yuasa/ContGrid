@@ -557,10 +557,15 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
         self,
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
+        render_mode: str | None = None,
         action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value,
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
+        if render_mode is not None:
+            render_config = render_config.model_copy(
+                update={"render_mode": render_mode}
+            )
         self.scenario: BaseScenario[ScenarioConfigT, ObsType] = scenario
         self.world: World = self.scenario.make_world(verbose=verbose)
         self.env = BaseEnv(
