@@ -36,10 +36,10 @@ class BaseScenario(
             drag=world_config.drag,
             verbose=verbose,
         )
-        # add agents
-        world.agents = self.init_agents(world)
         # add landmarks
         world.landmarks = self.init_landmarks(world)
+        # add agents
+        world.agents = self.init_agents(world)
 
         return world
 
@@ -58,10 +58,10 @@ class BaseScenario(
     def reset_world(
         self, world: World, np_random: np.random.Generator
     ) -> None:  # create initial conditions of the world
-        # reset agents
-        world.agents = self.reset_agents(world, np_random)
         # reset landmarks
         world.landmarks = self.reset_landmarks(world, np_random)
+        # reset agents
+        world.agents = self.reset_agents(world, np_random)
 
     @abstractmethod
     def reset_agents(self, world: World, np_random: np.random.Generator) -> list[Agent]:

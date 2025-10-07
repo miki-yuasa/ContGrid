@@ -52,7 +52,7 @@ class SpawnConfig(BaseModel):
         A dictionary mapping doorway names to their positions.
     """
 
-    agent: Position | None = (3, 3)
+    agent: Position | None = None  # (3, 3)
     goal: ObjConfig = ObjConfig(
         pos=(9, 8), reward=1.0, absorbing=False
     )  # List of goal objects, if any
@@ -195,9 +195,24 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 )
             else:
                 # Randomly place the agent in a free cell
-                free_cells = np.argwhere(world.grid.layout == 0)
-                chosen_cell = free_cells[np_random.choice(len(free_cells))]
-                agent.state.pos = chosen_cell + 0.5  # Center of the cell
+                free_cells = np.argwhere(world.numeric_grid == 0)
+
+                # Ensure the new position is not inside other landmarks
+                min_dist_to_landmark = -1
+                while min_dist_to_landmark < 0:
+                    chosen_cell = free_cells[np_random.choice(len(free_cells))]
+                    new_pos_x = chosen_cell[1]
+                    new_pos_y = world.grid.height_cells - 1 - chosen_cell[0]
+                    new_pos = np.array([new_pos_x, new_pos_y], dtype=np.float64)
+                    min_dist_to_landmark = np.min(
+                        [
+                            np.linalg.norm(new_pos - lm.state.pos)
+                            - lm.size
+                            - agent.size
+                            for lm in world.landmarks
+                        ]
+                    )
+                agent.state.pos = np.array([new_pos_x, new_pos_y], dtype=np.float64)
             agent.state.vel = np.array([0.0, 0.0], dtype=np.float64)
         return world.agents
 

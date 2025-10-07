@@ -182,6 +182,9 @@ class World:  # multi-agent world
         self.walls: list[Landmark]
         self.wall_collision_checker, self.walls = self._init_walls(self.grid)
 
+        # numeric grid representation
+        self.numeric_grid: NDArray[np.int_] = self.get_numeric_grid()
+
     def _init_walls(self, grid: Grid) -> tuple[WallCollisionChecker, list[Landmark]]:
         wall_collision_checker = WallCollisionChecker(
             grid.layout, grid.cell_size, self.verbose
@@ -211,6 +214,24 @@ class World:  # multi-agent world
             walls.append(wall)
 
         return wall_collision_checker, walls
+
+    def get_numeric_grid(self) -> NDArray[np.int_]:
+        """
+        Replace "#" with 1 and " " with 0 in the grid layout.
+        """
+        new_grid: list[list[int]] = []
+        for row in self.grid.layout:
+            new_row: list[int] = []
+            for cell in row:
+                if cell == "#":
+                    new_row.append(1)
+                elif cell == " ":
+                    new_row.append(0)
+                else:
+                    new_row.append(int(cell))
+            new_grid.append(new_row)
+        numeric_grid = np.array(new_grid, dtype=np.int_)
+        return numeric_grid
 
     # return all entities in the world
     @property

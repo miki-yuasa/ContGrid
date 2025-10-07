@@ -7,7 +7,7 @@ import numpy as np
 
 import contgrid
 
-num_steps = 100
+num_steps = 1
 
 env = gym.make("contgrid/Rooms-v0", max_episode_steps=num_steps)
 observation, info = env.reset(seed=42)
