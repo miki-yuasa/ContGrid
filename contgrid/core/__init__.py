@@ -1,6 +1,13 @@
 from .const import Color
 from .entities import Color, Entity, EntityShape, Landmark
-from .env import DEFAULT_RENDER_CONFIG, ActionMode, BaseEnv, EnvConfig, RenderConfig
+from .env import (
+    DEFAULT_RENDER_CONFIG,
+    ActionMode,
+    BaseEnv,
+    BaseGymEnv,
+    EnvConfig,
+    RenderConfig,
+)
 from .grid import Grid
 from .scenario import BaseScenario, ScenarioConfigT
 from .world import (

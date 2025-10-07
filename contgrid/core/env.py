@@ -554,8 +554,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
 
     def __init__(
         self,
-        scenario_class: type[BaseScenario[ScenarioConfigT, ObsType]],
-        config: ScenarioConfigT | None = None,
+        scenario: BaseScenario[ScenarioConfigT, ObsType],
         world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
         max_cycles: int = 100,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
@@ -563,9 +562,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
-        self.scenario: BaseScenario[ScenarioConfigT, ObsType] = scenario_class(
-            config, world_config
-        )
+        self.scenario: BaseScenario[ScenarioConfigT, ObsType] = scenario
         self.world: World = self.scenario.make_world(verbose=verbose)
         self.env = BaseEnv(
             self.scenario, max_cycles, render_config, action_mode, local_ratio

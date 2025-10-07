@@ -7,12 +7,15 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from contgrid.core import (
+    DEFAULT_RENDER_CONFIG,
     Agent,
+    BaseGymEnv,
     BaseScenario,
     Color,
     EntityState,
     Grid,
     Landmark,
+    RenderConfig,
     World,
     WorldConfig,
 )
@@ -28,7 +31,7 @@ class RewardConfig(BaseModel):
 class ObjConfig(BaseModel):
     pos: Position | None = None  # Default position indicating no specific position
     reward: float = 0.0
-    absorbing: bool = True
+    absorbing: bool = False
 
 
 class SpawnConfig(BaseModel):
@@ -49,11 +52,36 @@ class SpawnConfig(BaseModel):
         A dictionary mapping doorway names to their positions.
     """
 
-    agent: Position | None = None
-    goal: ObjConfig  # List of goal objects, if any
-    lavas: list[ObjConfig] = []  # List of lava objects, if any
-    holes: list[ObjConfig] = []  # List of hole objects, if any
-    doorways: dict[str, Position] = {}
+    agent: Position | None = (3, 3)
+    goal: ObjConfig = ObjConfig(
+        pos=(9, 8), reward=1.0, absorbing=True
+    )  # List of goal objects, if any
+    lavas: list[ObjConfig] = [
+        ObjConfig(pos=(7, 8), reward=0.0, absorbing=False),
+        ObjConfig(pos=(9, 9), reward=0.0, absorbing=False),
+        ObjConfig(pos=(5, 10), reward=0.0, absorbing=False),
+        ObjConfig(pos=(3, 7), reward=0.0, absorbing=False),
+        ObjConfig(pos=(2, 4), reward=-1.0, absorbing=True),
+        ObjConfig(pos=(3, 5), reward=-1.0, absorbing=True),
+        ObjConfig(pos=(10, 4), reward=-1.0, absorbing=True),
+        ObjConfig(pos=(8, 3), reward=-1.0, absorbing=True),
+    ]  # List of lava objects, if any
+    holes: list[ObjConfig] = [
+        ObjConfig(pos=(8, 9), reward=0.0, absorbing=False),
+        ObjConfig(pos=(9, 7), reward=0.0, absorbing=False),
+        ObjConfig(pos=(5, 8), reward=-1.0, absorbing=True),
+        ObjConfig(pos=(4, 9), reward=-1.0, absorbing=True),
+        ObjConfig(pos=(1, 5), reward=0.0, absorbing=True),
+        ObjConfig(pos=(5, 3), reward=0.0, absorbing=True),
+        ObjConfig(pos=(7, 4), reward=-1.0, absorbing=True),
+        ObjConfig(pos=(9, 2), reward=-1.0, absorbing=True),
+    ]  # List of hole objects, if any
+    doorways: dict[str, Position] = {
+        "ld": (2, 6),
+        "td": (6, 9),
+        "rd": (9, 5),
+        "bd": (6, 2),
+    }
     agent_size: float = 0.25
     goal_size: float = 0.5
     lava_size: float = 0.5
@@ -63,10 +91,11 @@ class SpawnConfig(BaseModel):
 
 
 class RoomsScenarioConfig(BaseModel):
-    spawn_config: SpawnConfig
+    spawn_config: SpawnConfig = SpawnConfig()
     reward_config: RewardConfig = RewardConfig(step_penalty=0.01)
 
 
+DEFAULT_ROOMS_SCENARIO_CONFIG = RoomsScenarioConfig()
 DEFAULT_WORLD_CONFIG = WorldConfig(
     grid=Grid(
         layout=[
@@ -91,7 +120,7 @@ DEFAULT_WORLD_CONFIG = WorldConfig(
 class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float64]]]):
     def __init__(
         self,
-        config: RoomsScenarioConfig,
+        config: RoomsScenarioConfig = DEFAULT_ROOMS_SCENARIO_CONFIG,
         world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
     ) -> None:
         super().__init__(config, world_config)
@@ -321,3 +350,62 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         } | doorway_distances
 
         return info_dict
+
+
+class RoomsEnv(
+    BaseGymEnv[dict[str, NDArray[np.float64]], NDArray[np.float64], RoomsScenarioConfig]
+):
+    """
+    Continuous Grid World with Rooms Environment
+
+    This environment is a continuous 2D grid world where an agent must navigate through rooms to reach a goal while avoiding obstacles like lava and holes.
+
+    Observation:
+        Type: Dict
+        {
+            "agent_pos": Box(2,)  # Agent's position (x, y)
+            "goal_pos": Box(2,)   # Goal's position (x, y)
+            "lava_pos": Box(2 * num_lavas,)  # Positions of lava objects
+            "hole_pos": Box(2 * num_holes,)  # Positions of hole objects
+            "goal_dist": Box(1,)  # Distance to the goal
+            "lava_dist": Box(1,)  # Distance to the closest lava
+            "hole_dist": Box(1,)  # Distance to the closest hole
+        }
+
+    Actions:
+        Type: Box(2,)
+        Num     Action
+        0       Move in x direction (-1.0 to 1.0)
+        1       Move in y direction (-1.0 to 1.0)
+
+    Reward:
+        - Step penalty: -config.reward_config.step_penalty per step
+        - Reaching the goal: +config.spawn_config.goal.reward
+        - Falling into lava or hole: config.spawn_config.lavas[i].reward or config.spawn_config.holes[i].reward
+    Starting State:
+        - Agent starts at config.spawn_config.agent position or random free cell
+        - Goal, lava, and holes are placed at their configured positions
+    Episode Termination:
+        - Agent reaches the goal
+        - Agent falls into an absorbing lava or hole
+        - Max episode steps reached
+    """
+
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
+
+    def __init__(
+        self,
+        config: RoomsScenarioConfig = DEFAULT_ROOMS_SCENARIO_CONFIG,
+        world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
+        render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
+        max_episode_steps: int = 100,
+        verbose: bool = False,
+    ) -> None:
+        scenario = RoomsScenario(config, world_config)
+        super().__init__(
+            scenario,
+            max_cycles=max_episode_steps,
+            render_config=render_config,
+            local_ratio=None,
+            verbose=verbose,
+        )
