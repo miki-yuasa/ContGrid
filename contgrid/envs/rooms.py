@@ -53,27 +53,27 @@ class SpawnConfig(BaseModel):
 
     agent: Position | None = (3, 3)
     goal: ObjConfig = ObjConfig(
-        pos=(9, 8), reward=1.0, absorbing=True
+        pos=(9, 8), reward=1.0, absorbing=False
     )  # List of goal objects, if any
     lavas: list[ObjConfig] = [
         ObjConfig(pos=(7, 8), reward=0.0, absorbing=False),
         ObjConfig(pos=(9, 9), reward=0.0, absorbing=False),
         ObjConfig(pos=(5, 10), reward=0.0, absorbing=False),
         ObjConfig(pos=(3, 7), reward=0.0, absorbing=False),
-        ObjConfig(pos=(2, 4), reward=-1.0, absorbing=True),
-        ObjConfig(pos=(3, 5), reward=-1.0, absorbing=True),
-        ObjConfig(pos=(10, 4), reward=-1.0, absorbing=True),
-        ObjConfig(pos=(8, 3), reward=-1.0, absorbing=True),
+        ObjConfig(pos=(2, 4), reward=-1.0, absorbing=False),
+        ObjConfig(pos=(3, 5), reward=-1.0, absorbing=False),
+        ObjConfig(pos=(10, 4), reward=-1.0, absorbing=False),
+        ObjConfig(pos=(8, 3), reward=-1.0, absorbing=False),
     ]  # List of lava objects, if any
     holes: list[ObjConfig] = [
         ObjConfig(pos=(8, 9), reward=0.0, absorbing=False),
         ObjConfig(pos=(9, 7), reward=0.0, absorbing=False),
-        ObjConfig(pos=(5, 8), reward=-1.0, absorbing=True),
-        ObjConfig(pos=(4, 9), reward=-1.0, absorbing=True),
-        ObjConfig(pos=(1, 5), reward=0.0, absorbing=True),
-        ObjConfig(pos=(5, 3), reward=0.0, absorbing=True),
-        ObjConfig(pos=(7, 4), reward=-1.0, absorbing=True),
-        ObjConfig(pos=(9, 2), reward=-1.0, absorbing=True),
+        ObjConfig(pos=(5, 8), reward=-1.0, absorbing=False),
+        ObjConfig(pos=(4, 9), reward=-1.0, absorbing=False),
+        ObjConfig(pos=(1, 5), reward=0.0, absorbing=False),
+        ObjConfig(pos=(5, 3), reward=0.0, absorbing=False),
+        ObjConfig(pos=(7, 4), reward=-1.0, absorbing=False),
+        ObjConfig(pos=(9, 2), reward=-1.0, absorbing=False),
     ]  # List of hole objects, if any
     doorways: dict[str, Position] = {
         "ld": (2, 6),
@@ -124,13 +124,13 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
     ) -> None:
         super().__init__(config, world_config)
         self.goal_thr_dist: float = (
-            config.spawn_config.goal_size + config.spawn_config.agent_size
+            config.spawn_config.goal_size + config.spawn_config.agent_size / 2
         )
         self.lava_thr_dist: float = (
-            config.spawn_config.lava_size + config.spawn_config.agent_size
+            config.spawn_config.lava_size + config.spawn_config.agent_size / 2
         )
         self.hole_thr_dist: float = (
-            config.spawn_config.hole_size + config.spawn_config.agent_size
+            config.spawn_config.hole_size + config.spawn_config.agent_size / 2
         )
         self.doorways: dict[str, NDArray[np.float64]] = {
             name: np.array(pos, dtype=np.float64)
@@ -165,6 +165,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 size=self.config.spawn_config.lava_size,
                 color=Color.ORANGE.name,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
+                hatch="//" if config.reward < 0 else "",
             )
             for i, config in enumerate(self.config.spawn_config.lavas)
         ]
@@ -176,13 +177,14 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 size=self.config.spawn_config.hole_size,
                 color=Color.PURPLE.name,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
+                hatch="//" if config.reward < 0 else "",
             )
             for i, config in enumerate(self.config.spawn_config.holes)
         ]
         landmarks = [self.goal] + self.lavas + self.holes
         return landmarks
 
-    def reset_agents(self, world: World, np_random) -> list[Agent]:
+    def reset_agents(self, world: World, np_random: np.random.Generator) -> list[Agent]:
         assert self.config
         for agent in world.agents:
             agent.terminated = False
@@ -198,7 +200,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             agent.state.vel = np.array([0.0, 0.0], dtype=np.float64)
         return world.agents
 
-    def reset_landmarks(self, world: World, np_random) -> list[Landmark]:
+    def reset_landmarks(
+        self, world: World, np_random: np.random.Generator
+    ) -> list[Landmark]:
         # Landmarks are static; no need to reset positions
         lava_pos: list[Position] = [
             (lava.state.pos[0], lava.state.pos[1]) for lava in self.lavas
@@ -248,15 +252,13 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["lava_pos"] = self.lava_pos.copy()
         obs["hole_pos"] = self.hole_pos.copy()
         # Distance to the goal
-        obs["goal_dist"] = np.linalg.norm(agent.state.pos - self.goal_pos)
+        obs["goal_dist"] = np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
         # Distance to the closest lava
-        obs["lava_dist"], _ = np.array(
-            [self.get_closest(agent.state.pos, self.lava_pos)], dtype=np.float64
-        )
+        lava_dist, _ = self.get_closest(agent.state.pos, self.lava_pos)
+        obs["lava_dist"] = np.array([lava_dist], dtype=np.float64)
         # Distance to the closest hole
-        obs["hole_dist"], _ = np.array(
-            [self.get_closest(agent.state.pos, self.hole_pos)], dtype=np.float64
-        )
+        hole_dist, _ = self.get_closest(agent.state.pos, self.hole_pos)
+        obs["hole_dist"] = np.array([hole_dist], dtype=np.float64)
         return obs
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
@@ -276,13 +278,21 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                     low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
                 ),
                 "lava_pos": spaces.Box(
-                    low=np.concat([low_bound] * num_lavas),
-                    high=np.concat([high_bound] * num_lavas),
+                    low=np.stack([low_bound] * num_lavas)
+                    if num_lavas > 0
+                    else np.array([], dtype=np.float64),
+                    high=np.stack([high_bound] * num_lavas)
+                    if num_lavas > 0
+                    else np.array([], dtype=np.float64),
                     dtype=np.float64,
                 ),
                 "hole_pos": spaces.Box(
-                    low=np.concat([low_bound] * num_holes),
-                    high=np.concat([high_bound] * num_holes),
+                    low=np.stack([low_bound] * num_holes)
+                    if num_holes > 0
+                    else np.array([], dtype=np.float64),
+                    high=np.stack([high_bound] * num_holes)
+                    if num_holes > 0
+                    else np.array([], dtype=np.float64),
                     dtype=np.float64,
                 ),
                 "goal_dist": spaces.Box(
@@ -325,7 +335,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         # Step penalty
         if not agent.terminated:
-            reward = -self.config.reward_config.step_penalty
+            reward -= self.config.reward_config.step_penalty
 
         return reward
 

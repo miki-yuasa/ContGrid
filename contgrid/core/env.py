@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
 from .const import ALPHABET, Color
-from .entities import EntityShape
+from .entities import Entity, EntityShape
 from .grid import Grid
 from .scenario import BaseScenario, ScenarioConfigT
 from .utils import AgentSelector
@@ -25,7 +25,7 @@ class RenderConfig(BaseModel):
     draw_grid: bool = True
     width_px: int = 700
     height_px: int = 700
-    dpi: int = 300
+    dpi: int = 100
 
 
 DEFAULT_RENDER_CONFIG = RenderConfig()
@@ -157,6 +157,8 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         self.steps = 0
 
         self.current_actions: list[ActType | None] = [None] * self.num_agents
+
+        self.agent_selection: str = self._agent_selector.reset()
 
     def movable_agent_action_dim(self, action_mode: ActionMode) -> int:
         if action_mode == ActionMode.CONTINUOUS_MINIMAL:
@@ -456,9 +458,9 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         if self.render_config.draw_grid:
             # Draw grid lines
             for x in range(self.grid.width_cells + 1):
-                self.ax.axvline(x=x_min + x, color="grey", linewidth=0.5)
+                self.ax.axvline(x=x_min + x, color="black", linewidth=0.5, zorder=1)
             for y in range(self.grid.height_cells + 1):
-                self.ax.axhline(y=y_min + y, color="grey", linewidth=0.5)
+                self.ax.axhline(y=y_min + y, color="black", linewidth=0.5, zorder=1)
 
         # The scaling factor is used for dynamic rescaling of the rendering - a.k.a Zoom In/Zoom Out effect
         # The 0.9 is a factor to keep the entities from appearing "too" out-of-bounds
@@ -471,16 +473,8 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             y: float
             x, y = entity.state.pos
 
-            radius = entity.size
-
             assert entity.color
-            self._draw_shape(
-                entity.shape,
-                entity.color,
-                x,
-                y,
-                radius,
-            )
+            self._draw_shape(entity)
 
             # text
             if isinstance(entity, Agent):
@@ -503,33 +497,40 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
                 )
                 text_line += 1
 
-    def _draw_shape(
-        self,
-        shape: EntityShape,
-        color: Color,
-        x: float,
-        y: float,
-        size: float,
-    ):
+    def _draw_shape(self, entity: Entity):
         # Convert color tuple to matplotlib-compatible format (0-1 range)
-        color_normalized = tuple(c / 255.0 for c in color)
+        x: float = entity.state.pos[0]
+        y: float = entity.state.pos[1]
+        size: float = entity.size
+        shape: EntityShape = entity.shape
+        color_normalized = tuple(c / 255.0 for c in entity.color)
         assert self.ax
-
         if shape == EntityShape.CIRCLE:
             # Draw filled circle
             circle = patches.Circle(
-                (x, y), size, facecolor=color_normalized, edgecolor="black", linewidth=1
+                (x, y),
+                size,
+                facecolor=color_normalized,
+                edgecolor="black",
+                linewidth=0.5,
+                zorder=2,
+                hatch=entity.hatch,
+                hatch_linewidth=0.3,
             )
             self.ax.add_patch(circle)
         elif shape == EntityShape.SQUARE:
             # Draw filled rectangle (square)
+            line_width: float = 0.0 if self.render_config.draw_grid else 0.5
             rect = patches.Rectangle(
                 (x, y),
                 size,
                 size,
                 facecolor=color_normalized,
                 edgecolor="black",
-                linewidth=1,
+                linewidth=line_width,
+                zorder=0,
+                hatch=entity.hatch,
+                hatch_linewidth=0.3,
             )
             self.ax.add_patch(rect)
         else:
@@ -571,6 +572,14 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
         self.observation_spaces = self.env.observation_spaces
         self.possible_agents = self.env.possible_agents
         self._index_map = self.env._index_map
+
+        self.observation_space = self.env.observation_space(self.agent_selection)
+        self.action_space = self.env.action_space(self.agent_selection)
+
+    @property
+    def agent_selection(self) -> str:
+        """Get the currently selected agent."""
+        return self.env.agent_selection
 
     def step(
         self, action: ActType

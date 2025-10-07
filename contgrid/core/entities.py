@@ -86,6 +86,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
     accel: float | None
     state: EntityStateT
     initial_mass: float
+    hatch: str
 
     def __init__(
         self,
@@ -101,6 +102,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         accel: float | None = None,
         state: EntityStateT = EntityState(),
         initial_mass: float = 1.0,
+        hatch: str = "",
     ):
         # name
         self.name = name
@@ -125,6 +127,8 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         self.state = state
         # mass
         self.initial_mass = initial_mass
+        # hatch pattern for rendering
+        self.hatch = hatch
 
     @property
     def mass(self):
@@ -139,13 +143,14 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
         shape: EntityShape = EntityShape.CIRCLE,
         movable: bool = False,
         rotatable: bool = False,
-        collide: bool = True,
+        collide: bool = False,
         density: float = 25,
         color: str = Color.GREEN.name,
         max_speed: float | None = None,
         accel: float | None = None,
         state: EntityState = EntityState(),
         initial_mass: float = 1,
+        hatch: str = "",
     ):
         super().__init__(
             name,
@@ -160,4 +165,5 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
             accel,
             state,
             initial_mass,
+            hatch,
         )

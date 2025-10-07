@@ -23,4 +23,7 @@ allow-direct-references = true
 packages = ["contgrid"]
 
 [dependency-groups]
-dev = ["pytest>=8.4.2"]
+dev = [
+    "imageio>=2.37.0",
+    "pytest>=8.4.2",
+]

@@ -5,7 +5,7 @@ from .typing import RGB
 # Grid length is 1[m]
 
 DRAG: float = 1
-COLLISION_FORCE: float = 1e3
+COLLISION_FORCE: float = 1
 CONTACT_MARGIN: float = 1e-2
 ALPHABET: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 

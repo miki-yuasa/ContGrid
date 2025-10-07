@@ -110,9 +110,10 @@ class WallCollisionChecker:
 
         # Store as a NumPy array for fast vectorized access
         self.wall_bounds: NDArray[np.float64] = np.array(walls, dtype=np.float64)
-        print(
-            f"Memoized CollisionChecker: Pre-processed {len(self.wall_bounds)} wall segments."
-        )
+        if self.verbose:
+            print(
+                f"Memoized CollisionChecker: Pre-processed {len(self.wall_bounds)} wall segments."
+            )
 
     def is_collision(
         self,

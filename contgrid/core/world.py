@@ -219,7 +219,7 @@ class World:  # multi-agent world
 
     @property
     def all_entities(self) -> list[Agent | Landmark]:
-        return self.agents + self.landmarks + self.walls
+        return self.walls + self.landmarks + self.agents
 
     # return all agents controllable by external policies
     @property
