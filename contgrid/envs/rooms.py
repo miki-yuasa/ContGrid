@@ -1,3 +1,4 @@
+from pprint import pprint
 from typing import Any
 
 import numpy as np
@@ -361,6 +362,12 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         return info_dict
 
 
+class RoomsEnvConfig(BaseModel):
+    scenario_config: RoomsScenarioConfig = DEFAULT_ROOMS_SCENARIO_CONFIG
+    world_config: WorldConfig = DEFAULT_WORLD_CONFIG
+    render_config: RenderConfig = DEFAULT_RENDER_CONFIG
+
+
 class RoomsEnv(
     BaseGymEnv[dict[str, NDArray[np.float64]], NDArray[np.float64], RoomsScenarioConfig]
 ):
@@ -404,17 +411,27 @@ class RoomsEnv(
 
     def __init__(
         self,
-        config: RoomsScenarioConfig = DEFAULT_ROOMS_SCENARIO_CONFIG,
+        scenario_config: RoomsScenarioConfig = DEFAULT_ROOMS_SCENARIO_CONFIG,
         world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
-        max_episode_steps: int = 100,
+        render_mode: str | None = None,
         verbose: bool = False,
     ) -> None:
-        scenario = RoomsScenario(config, world_config)
+        if render_mode is not None:
+            render_config = render_config.model_copy(
+                update={"render_mode": render_mode}
+            )
+        scenario = RoomsScenario(scenario_config, world_config)
         super().__init__(
             scenario,
-            max_cycles=max_episode_steps,
             render_config=render_config,
             local_ratio=None,
             verbose=verbose,
         )
+
+
+if __name__ == "__main__":
+    pprint(DEFAULT_ROOMS_SCENARIO_CONFIG.model_dump())
+    pprint(DEFAULT_WORLD_CONFIG.model_dump())
+    pprint(DEFAULT_RENDER_CONFIG.model_dump())
+    pprint(RoomsEnvConfig().model_dump())

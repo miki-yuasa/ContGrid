@@ -22,7 +22,7 @@ from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig
 
 class RenderConfig(BaseModel):
     render_mode: Literal["human", "rgb_array"] = "rgb_array"
-    draw_grid: bool = True
+    draw_grid: bool = False
     width_px: int = 700
     height_px: int = 700
     dpi: int = 100
@@ -63,7 +63,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
     def __init__(
         self,
         scenario: BaseScenario[ScenarioConfigT, ObsType],
-        max_cycles: int = 100,
+        max_cycles: int | None = None,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
         action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value,
         local_ratio: float | None = None,
@@ -227,7 +227,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         if next_idx == 0:
             self._execute_world_step()
             self.steps += 1
-            if self.steps >= self.max_cycles:
+            if self.max_cycles and self.steps >= self.max_cycles:
                 for a in self.agents:
                     self.truncations[a] = True
         else:
@@ -556,8 +556,6 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
     def __init__(
         self,
         scenario: BaseScenario[ScenarioConfigT, ObsType],
-        world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
-        max_cycles: int = 100,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
         action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value,
         local_ratio: float | None = None,
@@ -566,7 +564,11 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
         self.scenario: BaseScenario[ScenarioConfigT, ObsType] = scenario
         self.world: World = self.scenario.make_world(verbose=verbose)
         self.env = BaseEnv(
-            self.scenario, max_cycles, render_config, action_mode, local_ratio
+            self.scenario,
+            max_cycles=None,
+            render_config=render_config,
+            action_mode=action_mode,
+            local_ratio=local_ratio,
         )
         self.action_spaces = self.env.action_spaces
         self.observation_spaces = self.env.observation_spaces
