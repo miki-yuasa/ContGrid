@@ -153,6 +153,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         self.goal = Landmark(
             name="goal",
             size=self.config.spawn_config.goal_size,
+            collide=False,
             color=Color.GREEN.name,
             state=EntityState(
                 pos=np.array(self.config.spawn_config.goal.pos, dtype=np.float64)
@@ -164,6 +165,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             Landmark(
                 name=f"lava_{i}",
                 size=self.config.spawn_config.lava_size,
+                collide=False,
                 color=Color.ORANGE.name,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
                 hatch="//" if config.reward < 0 else "",
@@ -177,6 +179,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 name=f"hole_{i}",
                 size=self.config.spawn_config.hole_size,
                 color=Color.PURPLE.name,
+                collide=False,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
                 hatch="//" if config.reward < 0 else "",
             )
