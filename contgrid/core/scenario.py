@@ -3,7 +3,7 @@ from typing import Generic, TypeVar
 
 import numpy as np
 from gymnasium import spaces
-from numpy.typing import NDArray
+from gymnasium.core import ObsType
 
 from .entities import Landmark
 from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig
@@ -12,7 +12,7 @@ ScenarioConfigT = TypeVar("ScenarioConfigT")
 
 
 class BaseScenario(
-    ABC, Generic[ScenarioConfigT]
+    ABC, Generic[ScenarioConfigT, ObsType]
 ):  # defines scenario upon which the world is built
     def __init__(
         self,
@@ -74,7 +74,7 @@ class BaseScenario(
         pass
 
     @abstractmethod
-    def observation(self, agent: Agent, world: World) -> NDArray[np.float64]:
+    def observation(self, agent: Agent, world: World) -> ObsType:
         pass
 
     @abstractmethod

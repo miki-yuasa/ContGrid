@@ -1,11 +1,12 @@
 from enum import StrEnum
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, SupportsFloat
 
 import gymnasium
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
-from gymnasium import spaces
+from gymnasium import Env, spaces
+from gymnasium.core import ActType, ObsType
 from gymnasium.utils import seeding
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from numpy.typing import NDArray
@@ -16,9 +17,7 @@ from .entities import EntityShape
 from .grid import Grid
 from .scenario import BaseScenario, ScenarioConfigT
 from .utils import AgentSelector
-from .world import Agent, World
-
-ActionType = TypeVar("ActionType", bound=np.ndarray | int | None)
+from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig
 
 
 class RenderConfig(BaseModel):
@@ -49,7 +48,7 @@ class EnvConfig(BaseModel):
     verbose: bool = False
 
 
-class BaseEnv(Generic[ActionType, ScenarioConfigT]):
+class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "is_parallelizable": True,
@@ -63,7 +62,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
 
     def __init__(
         self,
-        scenario: BaseScenario[ScenarioConfigT],
+        scenario: BaseScenario[ScenarioConfigT, ObsType],
         max_cycles: int = 100,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
         action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value,
@@ -123,8 +122,8 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
                 else:
                     space_dim *= self.world.dim_c
 
-            obs_dim = len(self.scenario.observation(agent, self.world))
-            state_dim += obs_dim
+            # obs_dim = len(self.scenario.observation(agent, self.world))
+            # state_dim += obs_dim
             match self.action_mode:
                 case "continuous":
                     self.action_spaces[agent.name] = spaces.Box(
@@ -143,12 +142,12 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
                 agent, self.world
             )
 
-        self.state_space = spaces.Box(
-            low=-np.float32(np.inf),
-            high=+np.float32(np.inf),
-            shape=(state_dim,),
-            dtype=np.float32,
-        )
+        # self.state_space = spaces.Box(
+        #     low=-np.float32(np.inf),
+        #     high=+np.float32(np.inf),
+        #     shape=(state_dim,),
+        #     dtype=np.float32,
+        # )
 
         # Get the original cam_range
         # This will be used to scale the rendering
@@ -157,7 +156,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
 
         self.steps = 0
 
-        self.current_actions: list[ActionType | None] = [None] * self.num_agents
+        self.current_actions: list[ActType | None] = [None] * self.num_agents
 
     def movable_agent_action_dim(self, action_mode: ActionMode) -> int:
         if action_mode == ActionMode.CONTINUOUS_MINIMAL:
@@ -178,19 +177,19 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
     def _seed(self, seed: int | None = None):
         self.np_random, seed = seeding.np_random(seed)
 
-    def observe(self, agent: str) -> NDArray[np.float32]:
+    def observe(self, agent: str) -> ObsType:
         return self.scenario.observation(
             self.world.agents[self._index_map[agent]], self.world
-        ).astype(np.float32)
+        )
 
-    def state(self) -> NDArray[np.float32]:
-        states: tuple[NDArray[np.float32], ...] = tuple(
+    def state(self) -> tuple[ObsType, ...]:
+        states: tuple[ObsType, ...] = tuple(
             self.scenario.observation(
                 self.world.agents[self._index_map[agent]], self.world
-            ).astype(np.float32)
+            )
             for agent in self.possible_agents
         )
-        return np.concatenate(states, axis=None)
+        return states
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         if seed is not None:
@@ -207,9 +206,9 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         self.agent_selection = self._agent_selector.reset()
         self.steps = 0
 
-        self.current_actions: list[ActionType | None] = [None] * self.num_agents
+        self.current_actions: list[ActType | None] = [None] * self.num_agents
 
-    def step(self, action: ActionType) -> None:
+    def step(self, action: ActType) -> None:
         if (
             self.terminations[self.agent_selection]
             or self.truncations[self.agent_selection]
@@ -242,7 +241,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         # set action for each agent
         for i, agent in enumerate(self.world.agents):
             action = self.current_actions[i]
-            scenario_action: list[NDArray | int] = []
+            scenario_action: list[NDArray | int | np.integer | ActType] = []
             if agent.movable:
                 mdim = self.movable_agent_action_dim(self.action_mode)
                 if self.action_mode in self.continuous_modes:
@@ -254,6 +253,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
                     scenario_action.append(action % mdim)
                     action //= mdim
             if not agent.silent:
+                assert action
                 scenario_action.append(action)
             self._set_action(scenario_action, agent, self.action_spaces[agent.name])
 
@@ -277,7 +277,11 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
 
     # set env action for a particular agent
     def _set_action(
-        self, action: list[NDArray | int], agent: Agent, action_space, time=None
+        self,
+        action: list[NDArray | int | np.integer | ActType],
+        agent: Agent,
+        action_space,
+        time=None,
     ):
         agent.action.u = np.zeros(self.world.dim_p)
         agent.action.c = np.zeros(self.world.dim_c)
@@ -321,7 +325,7 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
         # make sure we used all elements of action
         assert len(action) == 0
 
-    def _was_dead_step(self, action: ActionType) -> None:
+    def _was_dead_step(self, action: ActType) -> None:
         """Helper function that performs step() for dead agents.
 
         Does the following:
@@ -529,3 +533,67 @@ class BaseEnv(Generic[ActionType, ScenarioConfigT]):
             plt.close(self.fig)
             self.fig = None
             self.ax = None
+
+
+class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfigT]):
+    """
+    A continuous grid environment with rooms and corridors.
+
+    This environment is built upon the `BaseEnv` class and utilizes a custom
+    scenario to create a world with multiple rooms connected by corridors.
+    """
+
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
+
+    def __init__(
+        self,
+        scenario_class: type[BaseScenario[ScenarioConfigT, ObsType]],
+        config: ScenarioConfigT | None = None,
+        world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
+        max_cycles: int = 100,
+        render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
+        action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value,
+        local_ratio: float | None = None,
+        verbose: bool = False,
+    ):
+        self.scenario: BaseScenario[ScenarioConfigT, ObsType] = scenario_class(
+            config, world_config
+        )
+        self.world: World = self.scenario.make_world(verbose=verbose)
+        self.env = BaseEnv(
+            self.scenario, max_cycles, render_config, action_mode, local_ratio
+        )
+        self.action_spaces = self.env.action_spaces
+        self.observation_spaces = self.env.observation_spaces
+        self.possible_agents = self.env.possible_agents
+        self._index_map = self.env._index_map
+
+    def step(
+        self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        self.env.step(action)
+        obs = self.env.observe(self.env.agent_selection)
+        reward = self.env.rewards[self.env.agent_selection]
+        terminated = self.env.terminations[self.env.agent_selection]
+        truncated = self.env.truncations[self.env.agent_selection]
+        info = self.env.infos[self.env.agent_selection]
+
+        return obs, reward, terminated, truncated, info
+
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[ObsType, dict[str, Any]]:
+        self.env.reset(seed=seed, options=options)
+        obs = self.env.observe(self.env.agent_selection)
+        info = self.env.infos[self.env.agent_selection]
+
+        return obs, info
+
+    def render(self):
+        return self.env.render()
+
+    def close(self):
+        return self.env.close()
