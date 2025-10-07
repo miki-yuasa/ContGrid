@@ -86,3 +86,6 @@ class BaseScenario(
 
     def reward(self, agent: Agent, world: World) -> float:
         return 0.0
+
+    def info(self, agent: Agent, world: World) -> dict:
+        return {}

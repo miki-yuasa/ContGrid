@@ -233,6 +233,13 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
 
         self._cumulative_rewards[cur_agent] = 0
         self._accumulate_rewards()
+        self.terminations[cur_agent] = (
+            self.terminations[cur_agent]
+            or self.world.agents[self._index_map[cur_agent]].terminated
+        )
+        self.infos[cur_agent] = self.scenario.info(
+            self.world.agents[self._index_map[cur_agent]], self.world
+        )
 
         if self.render_mode == "human":
             self.render()

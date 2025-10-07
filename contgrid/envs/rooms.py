@@ -7,18 +7,12 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from contgrid.core import (
-    DEFAULT_RENDER_CONFIG,
-    ActionMode,
     Agent,
-    AgentState,
-    BaseEnv,
     BaseScenario,
     Color,
     EntityState,
     Grid,
     Landmark,
-    RenderConfig,
-    ScenarioConfigT,
     World,
     WorldConfig,
 )
@@ -51,25 +45,26 @@ class SpawnConfig(BaseModel):
         A list of configurations for lava objects.
     holes: list[ObjConfig]
         A list of configurations for hole objects.
-    cleared_doorways: list[Position]
-        A list of positions for cleared doorways, if any.
-        When specified, there will be no negative reward objects placed next to these doorways.
+    doorways: dict[str, Position]
+        A dictionary mapping doorway names to their positions.
     """
 
     agent: Position | None = None
     goal: ObjConfig  # List of goal objects, if any
     lavas: list[ObjConfig] = []  # List of lava objects, if any
     holes: list[ObjConfig] = []  # List of hole objects, if any
+    doorways: dict[str, Position] = {}
+    agent_size: float = 0.25
+    goal_size: float = 0.5
+    lava_size: float = 0.5
+    hole_size: float = 0.5
 
     model_config = {"arbitrary_types_allowed": True}
 
 
 class RoomsScenarioConfig(BaseModel):
     spawn_config: SpawnConfig
-    reward_config: RewardConfig = RewardConfig(
-        step_penalty=0.01,
-        sum_reward=True,
-    )
+    reward_config: RewardConfig = RewardConfig(step_penalty=0.01)
 
 
 DEFAULT_WORLD_CONFIG = WorldConfig(
@@ -100,11 +95,25 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
     ) -> None:
         super().__init__(config, world_config)
+        self.goal_thr_dist: float = (
+            config.spawn_config.goal_size + config.spawn_config.agent_size
+        )
+        self.lava_thr_dist: float = (
+            config.spawn_config.lava_size + config.spawn_config.agent_size
+        )
+        self.hole_thr_dist: float = (
+            config.spawn_config.hole_size + config.spawn_config.agent_size
+        )
+        self.doorways: dict[str, NDArray[np.float64]] = {
+            name: np.array(pos, dtype=np.float64)
+            for name, pos in config.spawn_config.doorways.items()
+        }
 
     def init_agents(self, world: World, np_random=None) -> list[Agent]:
+        assert self.config
         agent = Agent(
             name="agent_0",
-            size=0.25,
+            size=self.config.spawn_config.agent_size,
             color=Color.SKY_BLUE.name,
         )
         return [agent]
@@ -114,7 +123,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         # Initialize the goal
         self.goal = Landmark(
             name="goal",
-            size=0.5,
+            size=self.config.spawn_config.goal_size,
             color=Color.GREEN.name,
             state=EntityState(
                 pos=np.array(self.config.spawn_config.goal.pos, dtype=np.float64)
@@ -125,7 +134,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         self.lavas = [
             Landmark(
                 name=f"lava_{i}",
-                size=0.5,
+                size=self.config.spawn_config.lava_size,
                 color=Color.ORANGE.name,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
             )
@@ -136,7 +145,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         self.holes = [
             Landmark(
                 name=f"hole_{i}",
-                size=0.5,
+                size=self.config.spawn_config.hole_size,
                 color=Color.PURPLE.name,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
             )
@@ -148,6 +157,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
     def reset_agents(self, world: World, np_random) -> list[Agent]:
         assert self.config
         for agent in world.agents:
+            agent.terminated = False
             if self.config.spawn_config.agent is not None:
                 agent.state.pos = np.array(
                     self.config.spawn_config.agent, dtype=np.float64
@@ -177,11 +187,29 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
     def get_closest(
         self, pos: NDArray[np.float64], objects: NDArray[np.float64]
-    ) -> float:
+    ) -> tuple[float, int]:
+        """
+        Return the distance to the closest object from the given position.
+        If there are no objects, return infinity.
+
+        Parameters
+        ----------
+        pos : NDArray[np.float64]
+            The position to measure from.
+        objects : NDArray[np.float64]
+            The positions of the objects.
+
+        Returns
+        -------
+        min_dist : float
+            The distance to the closest object, or infinity if no objects exist.
+        index : int
+            The index of the closest object, or -1 if no objects exist.
+        """
         if len(objects) == 0:
-            return np.inf
+            return np.inf, -1
         dists = np.linalg.norm(objects - pos, axis=1)
-        return np.min(dists)
+        return np.min(dists), np.argmin(dists, axis=0)
 
     def observation(self, agent: Agent, world: World) -> dict[str, NDArray[np.float64]]:
         obs = {}
@@ -192,15 +220,13 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["lava_pos"] = self.lava_pos.copy()
         obs["hole_pos"] = self.hole_pos.copy()
         # Distance to the goal
-        obs["goal_dist"] = np.array(
-            [self.get_closest(agent.state.pos, self.goal_pos)], dtype=np.float64
-        )
+        obs["goal_dist"] = np.linalg.norm(agent.state.pos - self.goal_pos)
         # Distance to the closest lava
-        obs["lava_dist"] = np.array(
+        obs["lava_dist"], _ = np.array(
             [self.get_closest(agent.state.pos, self.lava_pos)], dtype=np.float64
         )
         # Distance to the closest hole
-        obs["hole_dist"] = np.array(
+        obs["hole_dist"], _ = np.array(
             [self.get_closest(agent.state.pos, self.hole_pos)], dtype=np.float64
         )
         return obs
@@ -242,3 +268,56 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 ),
             }
         )
+
+    def reward(self, agent: Agent, world: World) -> float:
+        lava_min_dist, lava_idx = self.get_closest(agent.state.pos, self.lava_pos)
+        hole_min_dist, hole_idx = self.get_closest(agent.state.pos, self.hole_pos)
+        goal_dist = np.linalg.norm(agent.state.pos - self.goal_pos)
+
+        assert self.config
+
+        reward: float
+        # Check if the agent has already terminated
+        if agent.terminated:
+            reward = 0.0
+        # Reward for reaching the goal
+        elif goal_dist < self.goal_thr_dist:
+            reward = self.config.spawn_config.goal.reward
+            agent.terminated = True
+        # Penalty for falling into lava
+        elif lava_min_dist < self.lava_thr_dist and lava_idx != -1:
+            reward = self.config.spawn_config.lavas[lava_idx].reward
+            agent.terminated = self.config.spawn_config.lavas[lava_idx].absorbing
+        # Penalty for falling into a hole
+        elif hole_min_dist < self.hole_thr_dist and hole_idx != -1:
+            reward = self.config.spawn_config.holes[hole_idx].reward
+            agent.terminated = self.config.spawn_config.holes[hole_idx].absorbing
+        else:
+            reward = 0.0
+
+        # Step penalty
+        if not agent.terminated:
+            reward = -self.config.reward_config.step_penalty
+
+        return reward
+
+    def info(self, agent: Agent, world: World) -> dict:
+        info_dict: dict[str, Any] = {}
+        info_dict["terminated"] = agent.terminated
+
+        d_lv, _ = self.get_closest(agent.state.pos, self.lava_pos)
+        d_hl, _ = self.get_closest(agent.state.pos, self.hole_pos)
+        d_gl = np.linalg.norm(agent.state.pos - self.goal_pos)
+
+        doorway_distances = {
+            name: np.linalg.norm(agent.state.pos - pos)
+            for name, pos in self.doorways.items()
+        }
+
+        info_dict["distances"] = {
+            "lava": d_lv,
+            "hole": d_hl,
+            "goal": d_gl,
+        } | doorway_distances
+
+        return info_dict

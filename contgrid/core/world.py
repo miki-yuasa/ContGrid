@@ -67,6 +67,7 @@ class Agent(Entity[AgentState]):  # properties of agent entities
     u_range: float
     action: Action
     action_callback: Callable[["Agent", "World"], Action] | None
+    terminated: bool  # whether the agent has finished its task
 
     def __init__(
         self,
@@ -119,6 +120,9 @@ class Agent(Entity[AgentState]):  # properties of agent entities
         self.action = action
         # script behavior to execute
         self.action_callback = action_callback
+
+        # whether the agent has finished its task
+        self.terminated = False
 
 
 class WorldConfig(BaseModel):
