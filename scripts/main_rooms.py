@@ -1,4 +1,5 @@
 import os
+from pprint import pprint
 
 import gymnasium as gym
 import imageio
@@ -34,9 +35,12 @@ for step in range(num_steps):
     action = env.action_space.sample()
     observation, reward, terminated, truncated, info = env.step(action)
     print(
-        f"- Action taken: {action}, Reward: {reward}, Terminated: {terminated}, Truncated: {truncated}, Info: {info}"
+        f"- Action taken: {action}, Reward: {reward}, Terminated: {terminated}, Truncated: {truncated}"
     )
-    print(f"- New observation: {observation}")
+    print("- Info")
+    pprint(info)
+    print("- New observation: ")
+    pprint(observation)
     rewards.append(reward)
 
     if terminated or truncated:
