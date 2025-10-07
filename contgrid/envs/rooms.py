@@ -2,7 +2,7 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
-from gymnasium import Env
+from gymnasium import spaces
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
@@ -93,7 +93,7 @@ DEFAULT_WORLD_CONFIG = WorldConfig(
 )
 
 
-class RoomsScenario(BaseScenario[RoomsScenarioConfig, NDArray]):
+class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float64]]]):
     def __init__(
         self,
         config: RoomsScenarioConfig,
@@ -162,4 +162,83 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, NDArray]):
 
     def reset_landmarks(self, world: World, np_random) -> list[Landmark]:
         # Landmarks are static; no need to reset positions
+        lava_pos: list[Position] = [
+            (lava.state.pos[0], lava.state.pos[1]) for lava in self.lavas
+        ]
+        hole_pos: list[Position] = [
+            (hole.state.pos[0], hole.state.pos[1]) for hole in self.holes
+        ]
+        self.lava_pos: NDArray[np.float64] = np.array(lava_pos, dtype=np.float64)
+        self.hole_pos: NDArray[np.float64] = np.array(hole_pos, dtype=np.float64)
+        self.goal_pos: NDArray[np.float64] = np.array(
+            (self.goal.state.pos[0], self.goal.state.pos[1]), dtype=np.float64
+        )
         return world.landmarks
+
+    def get_closest(
+        self, pos: NDArray[np.float64], objects: NDArray[np.float64]
+    ) -> float:
+        if len(objects) == 0:
+            return np.inf
+        dists = np.linalg.norm(objects - pos, axis=1)
+        return np.min(dists)
+
+    def observation(self, agent: Agent, world: World) -> dict[str, NDArray[np.float64]]:
+        obs = {}
+        # Agent's own position
+        obs["agent_pos"] = agent.state.pos.copy()
+        # Goal position
+        obs["goal_pos"] = self.goal_pos.copy()
+        obs["lava_pos"] = self.lava_pos.copy()
+        obs["hole_pos"] = self.hole_pos.copy()
+        # Distance to the goal
+        obs["goal_dist"] = np.array(
+            [self.get_closest(agent.state.pos, self.goal_pos)], dtype=np.float64
+        )
+        # Distance to the closest lava
+        obs["lava_dist"] = np.array(
+            [self.get_closest(agent.state.pos, self.lava_pos)], dtype=np.float64
+        )
+        # Distance to the closest hole
+        obs["hole_dist"] = np.array(
+            [self.get_closest(agent.state.pos, self.hole_pos)], dtype=np.float64
+        )
+        return obs
+
+    def observation_space(self, agent: Agent, world: World) -> spaces.Space:
+        wall_limits = world.grid.wall_limits
+        low_bound = np.array((wall_limits.min_x, wall_limits.min_y))
+        high_bound = np.array((wall_limits.max_x, wall_limits.max_y))
+        num_lavas = len(self.lavas)
+        num_holes = len(self.holes)
+
+        max_dist = np.linalg.norm(high_bound - low_bound)
+        return spaces.Dict(
+            {
+                "agent_pos": spaces.Box(
+                    low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
+                ),
+                "goal_pos": spaces.Box(
+                    low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
+                ),
+                "lava_pos": spaces.Box(
+                    low=np.concat([low_bound] * num_lavas),
+                    high=np.concat([high_bound] * num_lavas),
+                    dtype=np.float64,
+                ),
+                "hole_pos": spaces.Box(
+                    low=np.concat([low_bound] * num_holes),
+                    high=np.concat([high_bound] * num_holes),
+                    dtype=np.float64,
+                ),
+                "goal_dist": spaces.Box(
+                    low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                ),
+                "lava_dist": spaces.Box(
+                    low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                ),
+                "hole_dist": spaces.Box(
+                    low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                ),
+            }
+        )

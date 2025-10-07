@@ -5,6 +5,13 @@ from pydantic import BaseModel
 Layout = list[str] | list[list[str]]
 
 
+class WallLimits(BaseModel):
+    min_x: float
+    max_x: float
+    min_y: float
+    max_y: float
+
+
 class Grid(BaseModel):
     layout: Layout
     cell_size: float = 1.0
@@ -25,6 +32,22 @@ class Grid(BaseModel):
     @property
     def height_cells(self) -> int:
         return len(self.layout)
+
+    @property
+    def wall_limits(self) -> WallLimits:
+        """Returns the continuous coordinate limits of the walls in the grid."""
+        if not self.layout or not self.layout[0]:
+            return WallLimits(min_x=0, max_x=0, min_y=0, max_y=0)
+
+        n_rows = len(self.layout)
+        n_cols = len(self.layout[0])
+
+        min_x = (0 - 0.5) * self.cell_size
+        max_x = (n_cols - 0.5) * self.cell_size
+        min_y = (0 - 0.5) * self.cell_size
+        max_y = (n_rows - 0.5) * self.cell_size
+
+        return WallLimits(min_x=min_x, max_x=max_x, min_y=min_y, max_y=max_y)
 
 
 DEFAULT_GRID = Grid(
