@@ -417,6 +417,12 @@ class RoomsEnv(
         render_mode: str | None = None,
         verbose: bool = False,
     ) -> None:
+        if isinstance(scenario_config, dict):
+            scenario_config = RoomsScenarioConfig(**scenario_config)
+        if isinstance(world_config, dict):
+            world_config = WorldConfig(**world_config)
+        if isinstance(render_config, dict):
+            render_config = RenderConfig(**render_config)
         scenario = RoomsScenario(scenario_config, world_config)
         super().__init__(
             scenario,
