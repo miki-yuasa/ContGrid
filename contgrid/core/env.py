@@ -210,6 +210,11 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
 
         self.current_actions: list[ActType | None] = [None] * self.num_agents
 
+        cur_agent = self.agent_selection
+        self.infos[cur_agent] = self.scenario.info(
+            self.world.agents[self._index_map[cur_agent]], self.world
+        )
+
     def step(self, action: ActType) -> None:
         if (
             self.terminations[self.agent_selection]
