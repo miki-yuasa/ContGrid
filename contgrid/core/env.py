@@ -72,7 +72,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         super().__init__()
 
         self.render_config: RenderConfig = render_config
-        self.render_mode = render_config.render_mode
+        self.render_mode: Literal["human", "rgb_array"] = render_config.render_mode
         self.viewer = None
         self.world: World = scenario.make_world(verbose)
         self.grid: Grid = self.world.grid
@@ -86,7 +86,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
 
         # Set up the drawing window
 
-        self.renderOn = False
+        self.render_on = False
         self._seed()
 
         self.max_cycles = max_cycles
@@ -403,8 +403,8 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             self._cumulative_rewards[agent] += reward
 
     def enable_render(self, mode: str = "human") -> None:
-        if not self.renderOn:
-            if self.fig is None:
+        if not self.render_on or self.fig is None or self.ax is None:
+            if self.fig is None or self.ax is None:
                 self.fig, self.ax = plt.subplots(
                     figsize=(self.width / 100, self.height / 100), dpi=self.dpi
                 )
@@ -412,7 +412,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
                 self.ax.axis("off")  # Remove axes for clean rendering
             if mode == "human":
                 plt.ion()  # Turn on interactive mode
-            self.renderOn = True
+            self.render_on = True
 
     def render(self):
         if self.render_mode is None:
