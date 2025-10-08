@@ -138,6 +138,10 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             for name, pos in config.spawn_config.doorways.items()
         }
 
+        self.doorway_pos: NDArray[np.float64] = np.array(
+            list(self.doorways.values()), dtype=np.float64
+        )
+
     def init_agents(self, world: World, np_random=None) -> list[Agent]:
         assert self.config
         agent = Agent(
@@ -275,6 +279,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["lava_pos"] = self.lava_pos.copy()
         obs["hole_pos"] = self.hole_pos.copy()
         obs["wall_pos"] = self.world_pos.copy()
+        obs["doorway_pos"] = self.doorway_pos.copy()
         # Distance to the goal
         obs["goal_dist"] = np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
         # Distance to the closest lava
@@ -285,6 +290,8 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["hole_dist"] = np.array([hole_dist], dtype=np.float64)
         wall_dist, _ = self.get_closest(agent.state.pos, self.world_pos)
         obs["wall_dist"] = np.array([wall_dist], dtype=np.float64)
+        obs["doorway_dist"] = self._get_doorway_distances(agent)
+
         return obs
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
@@ -334,6 +341,15 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                     else np.array([], dtype=np.float64),
                     dtype=np.float64,
                 ),
+                "doorway_pos": spaces.Box(
+                    low=np.array([low_bound] * len(self.doorways))
+                    if len(self.doorways) > 0
+                    else np.array([], dtype=np.float64),
+                    high=np.array([high_bound] * len(self.doorways))
+                    if len(self.doorways) > 0
+                    else np.array([], dtype=np.float64),
+                    dtype=np.float64,
+                ),
                 "goal_dist": spaces.Box(
                     low=0.0, high=max_dist, shape=(1,), dtype=np.float64
                 ),
@@ -345,6 +361,12 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 ),
                 "wall_dist": spaces.Box(
                     low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                ),
+                "doorway_dist": spaces.Box(
+                    low=0.0,
+                    high=max_dist,
+                    shape=(len(self.doorways),),
+                    dtype=np.float64,
                 ),
             }
         )
@@ -401,6 +423,12 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         } | doorway_distances
 
         return info_dict
+
+    def _get_doorway_distances(self, agent: Agent) -> NDArray[np.float64]:
+        return np.array(
+            [np.linalg.norm(agent.state.pos - pos) for pos in self.doorways.values()],
+            dtype=np.float64,
+        )
 
 
 class RoomsEnvConfig(BaseModel):
