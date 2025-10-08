@@ -4,14 +4,14 @@ import numpy as np
 from gymnasium import spaces
 from PIL import Image
 
+from contgrid.contgrid import BaseEnv
+from contgrid.core import Agent, AgentState, World
 from contgrid.core.const import Color
 from contgrid.core.entities import EntityState, Landmark
-from contgrid.core.env import BaseEnv
 from contgrid.core.scenario import BaseScenario
-from contgrid.core.world import Agent, AgentState, World
 
 
-class SimpleScenario(BaseScenario[None]):
+class SimpleScenario(BaseScenario[None, np.ndarray]):
     """A simple test scenario with one agent and one landmark"""
 
     def init_agents(self, world: World, np_random=None) -> list[Agent]:

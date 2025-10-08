@@ -6,16 +6,14 @@ from gymnasium import spaces
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
+from contgrid.contgrid import DEFAULT_RENDER_CONFIG, BaseGymEnv, RenderConfig
 from contgrid.core import (
-    DEFAULT_RENDER_CONFIG,
     Agent,
-    BaseGymEnv,
     BaseScenario,
     Color,
     EntityState,
     Grid,
     Landmark,
-    RenderConfig,
     World,
     WorldConfig,
 )

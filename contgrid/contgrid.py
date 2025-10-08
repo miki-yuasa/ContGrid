@@ -12,12 +12,12 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
-from .const import ALPHABET, Color
-from .entities import Entity, EntityShape
-from .grid import Grid
-from .scenario import BaseScenario, ScenarioConfigT
-from .utils import AgentSelector
-from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig
+from contgrid.core.const import ALPHABET
+from contgrid.core.entities import Entity, EntityShape
+from contgrid.core.grid import Grid
+from contgrid.core.scenario import BaseScenario, ScenarioConfigT
+from contgrid.core.utils import AgentSelector
+from contgrid.core.world import Agent, World
 
 
 class RenderConfig(BaseModel):
