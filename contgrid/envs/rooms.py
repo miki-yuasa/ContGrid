@@ -278,7 +278,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["goal_pos"] = self.goal_pos.copy() - agent.state.pos.copy()
         obs["lava_pos"] = self.lava_pos.copy() - agent.state.pos.copy()
         obs["hole_pos"] = self.hole_pos.copy() - agent.state.pos.copy()
-        obs["wall_pos"] = self.world_pos.copy() - agent.state.pos.copy()
+        # obs["wall_pos"] = self.world_pos.copy() - agent.state.pos.copy()
         obs["doorway_pos"] = self.doorway_pos.copy() - agent.state.pos.copy()
         # Distance to the goal
         obs["goal_dist"] = np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
@@ -330,19 +330,19 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                     else np.array([], dtype=np.float64),
                     dtype=np.float64,
                 ),
-                "wall_pos": spaces.Box(
-                    low=np.array(
-                        [low_bound] * len(world.wall_collision_checker.wall_centers)
-                    )
-                    if len(world.wall_collision_checker.wall_centers) > 0
-                    else np.array([], dtype=np.float64),
-                    high=np.array(
-                        [high_bound] * len(world.wall_collision_checker.wall_centers)
-                    )
-                    if len(world.wall_collision_checker.wall_centers) > 0
-                    else np.array([], dtype=np.float64),
-                    dtype=np.float64,
-                ),
+                # "wall_pos": spaces.Box(
+                #     low=np.array(
+                #         [low_bound] * len(world.wall_collision_checker.wall_centers)
+                #     )
+                #     if len(world.wall_collision_checker.wall_centers) > 0
+                #     else np.array([], dtype=np.float64),
+                #     high=np.array(
+                #         [high_bound] * len(world.wall_collision_checker.wall_centers)
+                #     )
+                #     if len(world.wall_collision_checker.wall_centers) > 0
+                #     else np.array([], dtype=np.float64),
+                #     dtype=np.float64,
+                # ),
                 "doorway_pos": spaces.Box(
                     low=np.array([low_bound] * len(self.doorways))
                     if len(self.doorways) > 0
