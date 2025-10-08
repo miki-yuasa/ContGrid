@@ -31,7 +31,7 @@ class RenderConfig(BaseModel):
 DEFAULT_RENDER_CONFIG = RenderConfig()
 
 
-class ActionMode(StrEnum):
+class ActionOption(StrEnum):
     DISCRETE = "discrete"
     CONTINUOUS = "continuous"
     CONTINUOUS_MINIMAL = "continuous-minimal"
@@ -43,7 +43,7 @@ class EnvConfig(BaseModel):
     scenario: BaseScenario
     max_cycles: int = 100
     render_config: RenderConfig = DEFAULT_RENDER_CONFIG
-    action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value
+    action_opt: str = ActionOption.CONTINUOUS_MINIMAL.value
     local_ratio: float | None = None
     verbose: bool = False
 
@@ -55,9 +55,9 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         "render_fps": 10,
     }
 
-    continuous_modes: list[ActionMode] = [
-        ActionMode.CONTINUOUS,
-        ActionMode.CONTINUOUS_MINIMAL,
+    continuous_modes: list[ActionOption] = [
+        ActionOption.CONTINUOUS,
+        ActionOption.CONTINUOUS_MINIMAL,
     ]
 
     def __init__(
@@ -65,7 +65,8 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         max_cycles: int | None = None,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
-        action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value,
+        action_opt: str = ActionOption.CONTINUOUS_MINIMAL.value,
+        discretization: int | None = None,
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
@@ -91,7 +92,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
 
         self.max_cycles: int | None = max_cycles
         self.scenario = scenario
-        self.action_mode: ActionMode = ActionMode(action_mode)
+        self.action_opt: ActionOption = ActionOption(action_opt)
         self.local_ratio = local_ratio
 
         self.scenario.reset_world(self.world, self.np_random)
@@ -110,21 +111,21 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         state_dim: int = 0
         for agent in self.world.agents:
             if agent.movable:
-                space_dim = self.movable_agent_action_dim(self.action_mode)
-            elif self.action_mode in self.continuous_modes:
+                space_dim = self.movable_agent_action_dim(self.action_opt)
+            elif self.action_opt in self.continuous_modes:
                 space_dim = 0
             else:
                 space_dim = 1
 
             if not agent.silent:
-                if self.action_mode in self.continuous_modes:
+                if self.action_opt in self.continuous_modes:
                     space_dim += self.world.dim_c
                 else:
                     space_dim *= self.world.dim_c
 
             # obs_dim = len(self.scenario.observation(agent, self.world))
             # state_dim += obs_dim
-            match self.action_mode:
+            match self.action_opt:
                 case "continuous":
                     self.action_spaces[agent.name] = spaces.Box(
                         low=0, high=agent.u_range, shape=(space_dim,)
@@ -136,7 +137,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
                 case "discrete":
                     self.action_spaces[agent.name] = spaces.Discrete(space_dim)
                 case _:
-                    raise ValueError(f"Unknown action mode {self.action_mode}")
+                    raise ValueError(f"Unknown action mode {self.action_opt}")
 
             self.observation_spaces[agent.name] = scenario.observation_space(
                 agent, self.world
@@ -160,8 +161,8 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
 
         self.agent_selection: str = self._agent_selector.reset()
 
-    def movable_agent_action_dim(self, action_mode: ActionMode) -> int:
-        if action_mode == ActionMode.CONTINUOUS_MINIMAL:
+    def movable_agent_action_dim(self, action_opt: ActionOption) -> int:
+        if action_opt == ActionOption.CONTINUOUS_MINIMAL:
             return self.world.dim_p
         else:
             return self.world.dim_p * 2 + 1
@@ -257,8 +258,8 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             action = self.current_actions[i]
             scenario_action: list[NDArray | int | np.integer | ActType] = []
             if agent.movable:
-                mdim = self.movable_agent_action_dim(self.action_mode)
-                if self.action_mode in self.continuous_modes:
+                mdim = self.movable_agent_action_dim(self.action_opt)
+                if self.action_opt in self.continuous_modes:
                     assert isinstance(action, np.ndarray)
                     scenario_action.append(action[0:mdim])
                     action = action[mdim:]
@@ -303,7 +304,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         if agent.movable:
             # physical action
             agent.action.u = np.zeros(self.world.dim_p)
-            match self.action_mode:
+            match self.action_opt:
                 case "continuous":
                     assert isinstance(action[0], np.ndarray)
                     agent.action.u[0] += action[0][2] - action[0][1]
@@ -329,7 +330,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             action = action[1:]
         if not agent.silent:
             # communication action
-            if self.action_mode in self.continuous_modes:
+            if self.action_opt in self.continuous_modes:
                 assert isinstance(action[0], np.ndarray)
                 agent.action.c = action[0]
             else:
@@ -487,7 +488,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
                     continue
                 if np.all(entity.state.c == 0):
                     word = "_"
-                elif self.action_mode in self.continuous_modes:
+                elif self.action_opt in self.continuous_modes:
                     word = (
                         "[" + ",".join([f"{comm:.2f}" for comm in entity.state.c]) + "]"
                     )
@@ -563,7 +564,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
         render_mode: str | None = None,
-        action_mode: str = ActionMode.CONTINUOUS_MINIMAL.value,
+        action_opt: str = ActionOption.CONTINUOUS_MINIMAL.value,
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
@@ -577,7 +578,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
             self.scenario,
             max_cycles=None,
             render_config=render_config,
-            action_mode=action_mode,
+            action_opt=action_opt,
             local_ratio=local_ratio,
         )
         self.action_spaces = self.env.action_spaces

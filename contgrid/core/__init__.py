@@ -2,7 +2,7 @@ from .const import Color
 from .entities import Color, Entity, EntityShape, Landmark
 from .env import (
     DEFAULT_RENDER_CONFIG,
-    ActionMode,
+    ActionOption,
     BaseEnv,
     BaseGymEnv,
     EnvConfig,
