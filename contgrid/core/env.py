@@ -89,7 +89,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         self.render_on = False
         self._seed()
 
-        self.max_cycles = max_cycles
+        self.max_cycles: int | None = max_cycles
         self.scenario = scenario
         self.action_mode: ActionMode = ActionMode(action_mode)
         self.local_ratio = local_ratio
@@ -232,7 +232,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         if next_idx == 0:
             self._execute_world_step()
             self.steps += 1
-            if self.max_cycles and self.steps >= self.max_cycles:
+            if self.max_cycles is not None and self.steps >= self.max_cycles:
                 for a in self.agents:
                     self.truncations[a] = True
         else:
