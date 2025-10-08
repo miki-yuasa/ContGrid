@@ -275,11 +275,11 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         # Agent's own position
         obs["agent_pos"] = agent.state.pos.copy()
         # Goal position
-        obs["goal_pos"] = self.goal_pos.copy()
-        obs["lava_pos"] = self.lava_pos.copy()
-        obs["hole_pos"] = self.hole_pos.copy()
-        obs["wall_pos"] = self.world_pos.copy()
-        obs["doorway_pos"] = self.doorway_pos.copy()
+        obs["goal_pos"] = self.goal_pos.copy() - agent.state.pos.copy()
+        obs["lava_pos"] = self.lava_pos.copy() - agent.state.pos.copy()
+        obs["hole_pos"] = self.hole_pos.copy() - agent.state.pos.copy()
+        obs["wall_pos"] = self.world_pos.copy() - agent.state.pos.copy()
+        obs["doorway_pos"] = self.doorway_pos.copy() - agent.state.pos.copy()
         # Distance to the goal
         obs["goal_dist"] = np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
         # Distance to the closest lava
@@ -296,7 +296,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
         wall_limits = world.grid.wall_limits
-        low_bound = np.array((wall_limits.min_x, wall_limits.min_y))
+        low_bound = -np.array(
+            (wall_limits.max_x, wall_limits.max_y)
+        )  # np.array((wall_limits.min_x, wall_limits.min_y))
         high_bound = np.array((wall_limits.max_x, wall_limits.max_y))
         num_lavas = len(self.lavas)
         num_holes = len(self.holes)
