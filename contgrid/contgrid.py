@@ -12,6 +12,13 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
+from contgrid.core.action import (
+    ActionMode,
+    ContinuousFullVelocity,
+    ContinuousMinimalVelocity,
+    DiscreteDirectionVelocity,
+    DiscreteMinimalVelocity,
+)
 from contgrid.core.const import ALPHABET
 from contgrid.core.entities import Entity, EntityShape
 from contgrid.core.grid import Grid
@@ -60,17 +67,34 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         ActionOption.CONTINUOUS_MINIMAL,
     ]
 
+    native_action_modes: dict[str, type[ActionMode]] = {
+        str(ContinuousMinimalVelocity.name): ContinuousMinimalVelocity,
+        str(ContinuousFullVelocity.name): ContinuousFullVelocity,
+        str(DiscreteMinimalVelocity.name): DiscreteMinimalVelocity,
+        str(DiscreteDirectionVelocity.name): DiscreteDirectionVelocity,
+    }
+
     def __init__(
         self,
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         max_cycles: int | None = None,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
-        action_opt: str = ActionOption.CONTINUOUS_MINIMAL.value,
-        discretization: int | None = None,
+        action_mode: str | type[ActionMode] = "continuous_minimal_velocity",
+        action_mode_kwargs: dict[str, Any] = {},
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
         super().__init__()
+
+        match action_mode:
+            case str():
+                if action_mode not in self.native_action_modes:
+                    raise ValueError(f"Unknown action mode {action_mode}")
+                self.action_mode: ActionMode = self.native_action_modes[action_mode](
+                    **action_mode_kwargs
+                )
+            case _:
+                self.action_mode = action_mode(**action_mode_kwargs)
 
         self.render_config: RenderConfig = render_config
         self.render_mode: Literal["human", "rgb_array"] = render_config.render_mode
@@ -92,7 +116,6 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
 
         self.max_cycles: int | None = max_cycles
         self.scenario = scenario
-        self.action_opt: ActionOption = ActionOption(action_opt)
         self.local_ratio = local_ratio
 
         self.scenario.reset_world(self.world, self.np_random)
@@ -106,39 +129,10 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         self._agent_selector: AgentSelector[str] = AgentSelector(self.agents)
 
         # set spaces
-        self.action_spaces: dict[str, spaces.Space] = dict()
-        self.observation_spaces: dict[str, spaces.Space] = dict()
-        state_dim: int = 0
+        self.action_spaces: dict[str, spaces.Space[ActType]] = dict()
+        self.observation_spaces: dict[str, spaces.Space[ObsType]] = dict()
         for agent in self.world.agents:
-            if agent.movable:
-                space_dim = self.movable_agent_action_dim(self.action_opt)
-            elif self.action_opt in self.continuous_modes:
-                space_dim = 0
-            else:
-                space_dim = 1
-
-            if not agent.silent:
-                if self.action_opt in self.continuous_modes:
-                    space_dim += self.world.dim_c
-                else:
-                    space_dim *= self.world.dim_c
-
-            # obs_dim = len(self.scenario.observation(agent, self.world))
-            # state_dim += obs_dim
-            match self.action_opt:
-                case "continuous":
-                    self.action_spaces[agent.name] = spaces.Box(
-                        low=0, high=agent.u_range, shape=(space_dim,)
-                    )
-                case "continuous-minimal":
-                    self.action_spaces[agent.name] = spaces.Box(
-                        low=-agent.u_range, high=agent.u_range, shape=(space_dim,)
-                    )
-                case "discrete":
-                    self.action_spaces[agent.name] = spaces.Discrete(space_dim)
-                case _:
-                    raise ValueError(f"Unknown action mode {self.action_opt}")
-
+            self.action_spaces[agent.name] = self.action_mode.define_action_space(agent)
             self.observation_spaces[agent.name] = scenario.observation_space(
                 agent, self.world
             )
