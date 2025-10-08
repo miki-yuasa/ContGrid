@@ -6,5 +6,4 @@ import gymnasium as gym
 gym.register(
     id="contgrid/Rooms-v0",
     entry_point="contgrid.envs.rooms:RoomsEnv",
-    max_episode_steps=100,
 )
