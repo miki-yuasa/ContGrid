@@ -83,7 +83,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
     density: float
     color: Color = Color.WHITE
     max_speed: float | None
-    accel: float | None
+    accel: float
     state: EntityStateT
     initial_mass: float
     hatch: str
@@ -99,7 +99,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         density: float = 25.0,
         color: str = Color.WHITE.name,
         max_speed: float | None = None,
-        accel: float | None = None,
+        accel: float = 0.0,
         state: EntityStateT = EntityState(),
         initial_mass: float = 1.0,
         hatch: str = "",
@@ -147,7 +147,7 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
         density: float = 25,
         color: str = Color.GREEN.name,
         max_speed: float | None = None,
-        accel: float | None = None,
+        accel: float = 0.0,
         state: EntityState = EntityState(),
         initial_mass: float = 1,
         hatch: str = "",

@@ -1,31 +1,36 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Generic
 
 import numpy as np
 from gymnasium.core import ActType
-from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
+from gymnasium.spaces import Box, MultiDiscrete, Space
 from numpy.typing import NDArray
 
 from .agent import Agent
+from .world import World
 
 
 class ActionMode(Generic[ActType], ABC):
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        pass
+    name: str  # unique name of the action mode
 
-    @property
-    def cap_name(self) -> str:
-        return self.name.capitalize()
+    @classmethod
+    def cap_name(cls) -> str:
+        return cls.name.capitalize()
 
     @abstractmethod
     def define_action_space(self, agent: Agent) -> Space[ActType]:
         pass
 
     @abstractmethod
-    def update_agent_action(self, agent: Agent, action: ActType) -> None:
+    def update_agent_action(self, agent: Agent, action: ActType, world: World) -> None:
         pass
+
+    def _zero_agent_actions(self, agent: Agent, world: World) -> None:
+        agent.action.u = np.zeros(world.dim_p)
+        agent.action.c = np.zeros(world.dim_c)
+
+    def _apply_sensitivity(self, agent: Agent, sensitivity: float) -> None:
+        agent.action.u *= sensitivity
 
     def dim(self, agent: Agent) -> int:
         space_shape: tuple[int, ...] | None = self.define_action_space(agent).shape
@@ -33,9 +38,7 @@ class ActionMode(Generic[ActType], ABC):
 
 
 class ContinuousMinimalVelocity(ActionMode[NDArray[np.float64]]):
-    @property
-    def name(self) -> str:
-        return "continuous_minimal_velocity"
+    name: str = "continuous_minimal_velocity"
 
     def define_action_space(self, agent: Agent) -> Space[NDArray[np.float64]]:
         low_bound: list[float] = []
@@ -52,9 +55,15 @@ class ContinuousMinimalVelocity(ActionMode[NDArray[np.float64]]):
             dtype=np.float64,
         )
 
-    def update_agent_action(self, agent: Agent, action: NDArray[np.float64]) -> None:
+    def update_agent_action(
+        self, agent: Agent, action: NDArray[np.float64], world: World
+    ) -> None:
+        self._zero_agent_actions(agent, world)
+
         if agent.movable:
             agent.action.u += action[0:2]
+
+            self._apply_sensitivity(agent, agent.accel)
 
         if not agent.silent:
             agent.action.c = action[-1]
@@ -66,12 +75,10 @@ class DiscreteMinimalVelocity(ActionMode[NDArray[np.integer]]):
     The low/high bounds are [-u_range, u_range] for v_x and v_y, and [0, 1] for communication.
     """
 
+    name: str = "discrete_minimal_velocity"
+
     def __init__(self, num_discrete: int) -> None:
         self.num_discrete = num_discrete
-
-    @property
-    def name(self) -> str:
-        return "discrete_minimal_velocity"
 
     def define_action_space(self, agent: Agent) -> Space[NDArray[np.integer]]:
         nvecs: list[int] = []
@@ -82,11 +89,15 @@ class DiscreteMinimalVelocity(ActionMode[NDArray[np.integer]]):
 
         return MultiDiscrete(nvecs, dtype=np.int64)
 
-    def update_agent_action(self, agent: Agent, action: NDArray[np.integer]) -> None:
+    def update_agent_action(
+        self, agent: Agent, action: NDArray[np.integer], world: World
+    ) -> None:
         """
         Convert the discrete action into continuous action and update the agent's action.
         """
         # Convert the discrete action into continuous action
+        self._zero_agent_actions(agent, world)
+
         if agent.movable:
             agent.action.u[0] = (
                 action[0] / self.num_discrete
@@ -94,6 +105,9 @@ class DiscreteMinimalVelocity(ActionMode[NDArray[np.integer]]):
             agent.action.u[1] = (
                 action[1] / self.num_discrete
             ) * 2 * agent.u_range - agent.u_range
+
+            self._apply_sensitivity(agent, agent.accel)
+
         if not agent.silent:
             agent.action.c = action[-1] / self.num_discrete
 
@@ -104,9 +118,7 @@ class ContinuousFullVelocity(ActionMode[NDArray[np.float64]]):
     The bound is [0, u_range] for v_x and v_y, and [0, 1] for communication.
     """
 
-    @property
-    def name(self) -> str:
-        return "continuous_full_velocity"
+    name: str = "continuous_full_velocity"
 
     def define_action_space(self, agent: Agent) -> Space[NDArray[np.float64]]:
         low_bound: list[float] = []
@@ -123,10 +135,16 @@ class ContinuousFullVelocity(ActionMode[NDArray[np.float64]]):
             dtype=np.float64,
         )
 
-    def update_agent_action(self, agent: Agent, action: NDArray[np.float64]) -> None:
+    def update_agent_action(
+        self, agent: Agent, action: NDArray[np.float64], world: World
+    ) -> None:
+        self._zero_agent_actions(agent, world)
+
         if agent.movable:
             agent.action.u[0] += action[0] - action[1]
             agent.action.u[1] += action[2] - action[3]
+
+            self._apply_sensitivity(agent, agent.accel)
 
         if not agent.silent:
             agent.action.c = action[-1]
@@ -137,9 +155,7 @@ class DiscreteDirectionVelocity(ActionMode[NDArray[np.integer]]):
     Add +1.0 velocity for a discrete direction (0: no, 1: up, 2: down, 3: left, 4: right) for velocity (i.e., 1 dimension), and communication (i.e., 1 dimension).
     """
 
-    @property
-    def name(self) -> str:
-        return "discrete_direction_velocity"
+    name: str = "discrete_direction_velocity"
 
     def define_action_space(self, agent: Agent) -> Space[NDArray[np.integer]]:
         nvecs: list[int] = []
@@ -150,7 +166,11 @@ class DiscreteDirectionVelocity(ActionMode[NDArray[np.integer]]):
 
         return MultiDiscrete(nvecs, dtype=np.int64)
 
-    def update_agent_action(self, agent: Agent, action: NDArray[np.integer]) -> None:
+    def update_agent_action(
+        self, agent: Agent, action: NDArray[np.integer], world: World
+    ) -> None:
+        self._zero_agent_actions(agent, world)
+
         if agent.movable:
             if action[0] == 1:  # up
                 agent.action.u[1] += 1.0
@@ -160,6 +180,8 @@ class DiscreteDirectionVelocity(ActionMode[NDArray[np.integer]]):
                 agent.action.u[0] -= 1.0
             elif action[0] == 4:  # right
                 agent.action.u[0] += 1.0
+
+            self._apply_sensitivity(agent, agent.accel)
 
         if not agent.silent:
             agent.action.c = action[-1]

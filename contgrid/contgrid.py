@@ -68,10 +68,10 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
     ]
 
     native_action_modes: dict[str, type[ActionMode]] = {
-        str(ContinuousMinimalVelocity.name): ContinuousMinimalVelocity,
-        str(ContinuousFullVelocity.name): ContinuousFullVelocity,
-        str(DiscreteMinimalVelocity.name): DiscreteMinimalVelocity,
-        str(DiscreteDirectionVelocity.name): DiscreteDirectionVelocity,
+        ContinuousMinimalVelocity.name: ContinuousMinimalVelocity,
+        ContinuousFullVelocity.name: ContinuousFullVelocity,
+        DiscreteMinimalVelocity.name: DiscreteMinimalVelocity,
+        DiscreteDirectionVelocity.name: DiscreteDirectionVelocity,
     }
 
     def __init__(
@@ -249,22 +249,25 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
     def _execute_world_step(self):
         # set action for each agent
         for i, agent in enumerate(self.world.agents):
-            action = self.current_actions[i]
-            scenario_action: list[NDArray | int | np.integer | ActType] = []
-            if agent.movable:
-                mdim = self.movable_agent_action_dim(self.action_opt)
-                if self.action_opt in self.continuous_modes:
-                    assert isinstance(action, np.ndarray)
-                    scenario_action.append(action[0:mdim])
-                    action = action[mdim:]
-                else:
-                    assert isinstance(action, int) or isinstance(action, np.integer)
-                    scenario_action.append(action % mdim)
-                    action //= mdim
-            if not agent.silent:
-                assert action
-                scenario_action.append(action)
-            self._set_action(scenario_action, agent, self.action_spaces[agent.name])
+            # action = self.current_actions[i]
+            # scenario_action: list[NDArray | int | np.integer | ActType] = []
+            # if agent.movable:
+            #     mdim = self.movable_agent_action_dim(self.action_opt)
+            #     if self.action_opt in self.continuous_modes:
+            #         assert isinstance(action, np.ndarray)
+            #         scenario_action.append(action[0:mdim])
+            #         action = action[mdim:]
+            #     else:
+            #         assert isinstance(action, int) or isinstance(action, np.integer)
+            #         scenario_action.append(action % mdim)
+            #         action //= mdim
+            # if not agent.silent:
+            #     assert action
+            #     scenario_action.append(action)
+            # self._set_action(scenario_action, agent, self.action_spaces[agent.name])
+            self.action_mode.update_agent_action(
+                agent, self.current_actions[i], self.world
+            )
 
         self.world.step()
 
@@ -285,54 +288,51 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             self.rewards[agent.name] = reward
 
     # set env action for a particular agent
-    def _set_action(
-        self,
-        action: list[NDArray | int | np.integer | ActType],
-        agent: Agent,
-        action_space,
-        time=None,
-    ):
-        agent.action.u = np.zeros(self.world.dim_p)
-        agent.action.c = np.zeros(self.world.dim_c)
+    # def _set_action(
+    #     self,
+    #     action: list[NDArray | int | np.integer | ActType],
+    #     agent: Agent,
+    #     action_space,
+    #     time=None,
+    # ):
+    #     agent.action.u = np.zeros(self.world.dim_p)
+    #     agent.action.c = np.zeros(self.world.dim_c)
 
-        if agent.movable:
-            # physical action
-            agent.action.u = np.zeros(self.world.dim_p)
-            match self.action_opt:
-                case "continuous":
-                    assert isinstance(action[0], np.ndarray)
-                    agent.action.u[0] += action[0][2] - action[0][1]
-                    agent.action.u[1] += action[0][4] - action[0][3]
-                case "continuous-minimal":
-                    assert isinstance(action[0], np.ndarray)
-                    agent.action.u[0] += action[0][0]
-                    agent.action.u[1] += action[0][1]
-                case "discrete":
-                    if action[0] == 1:
-                        agent.action.u[0] = -1.0
-                    if action[0] == 2:
-                        agent.action.u[0] = +1.0
-                    if action[0] == 3:
-                        agent.action.u[1] = -1.0
-                    if action[0] == 4:
-                        agent.action.u[1] = +1.0
+    #     if agent.movable:
+    #         # physical action
+    #         agent.action.u = np.zeros(self.world.dim_p)
+    #         match self.action_opt:
+    #             case "continuous":
+    #                 assert isinstance(action[0], np.ndarray)
+    #                 agent.action.u[0] += action[0][2] - action[0][1]
+    #                 agent.action.u[1] += action[0][4] - action[0][3]
+    #             case "continuous-minimal":
+    #                 assert isinstance(action[0], np.ndarray)
+    #                 agent.action.u[0] += action[0][0]
+    #                 agent.action.u[1] += action[0][1]
+    #             case "discrete":
+    #                 if action[0] == 1:
+    #                     agent.action.u[0] = -1.0
+    #                 if action[0] == 2:
+    #                     agent.action.u[0] = +1.0
+    #                 if action[0] == 3:
+    #                     agent.action.u[1] = -1.0
+    #                 if action[0] == 4:
+    #                     agent.action.u[1] = +1.0
 
-            sensitivity = 5.0
-            if agent.accel is not None:
-                sensitivity = agent.accel
-            agent.action.u *= sensitivity
-            action = action[1:]
-        if not agent.silent:
-            # communication action
-            if self.action_opt in self.continuous_modes:
-                assert isinstance(action[0], np.ndarray)
-                agent.action.c = action[0]
-            else:
-                agent.action.c = np.zeros(self.world.dim_c)
-                agent.action.c[action[0]] = 1.0
-            action = action[1:]
-        # make sure we used all elements of action
-        assert len(action) == 0
+    #         agent.action.u *= agent.accel
+    #         action = action[1:]
+    #     if not agent.silent:
+    #         # communication action
+    #         if self.action_opt in self.continuous_modes:
+    #             assert isinstance(action[0], np.ndarray)
+    #             agent.action.c = action[0]
+    #         else:
+    #             agent.action.c = np.zeros(self.world.dim_c)
+    #             agent.action.c[action[0]] = 1.0
+    #         action = action[1:]
+    #     # make sure we used all elements of action
+    #     assert len(action) == 0
 
     def _was_dead_step(self, action: ActType) -> None:
         """Helper function that performs step() for dead agents.
@@ -482,10 +482,10 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
                     continue
                 if np.all(entity.state.c == 0):
                     word = "_"
-                elif self.action_opt in self.continuous_modes:
-                    word = (
-                        "[" + ",".join([f"{comm:.2f}" for comm in entity.state.c]) + "]"
-                    )
+                # elif self.action_opt in self.continuous_modes:
+                #     word = (
+                #         "[" + ",".join([f"{comm:.2f}" for comm in entity.state.c]) + "]"
+                #     )
                 else:
                     word = alphabet[np.argmax(entity.state.c)]
 
@@ -558,7 +558,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
         render_mode: str | None = None,
-        action_opt: str = ActionOption.CONTINUOUS_MINIMAL.value,
+        action_mode: str | type[ActionMode] = "continuous_minimal_velocity",
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
@@ -572,7 +572,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
             self.scenario,
             max_cycles=None,
             render_config=render_config,
-            action_opt=action_opt,
+            action_mode=action_mode,
             local_ratio=local_ratio,
         )
         self.action_spaces = self.env.action_spaces
