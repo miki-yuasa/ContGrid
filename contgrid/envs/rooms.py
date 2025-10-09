@@ -86,6 +86,7 @@ class SpawnConfig(BaseModel):
     goal_size: float = 0.5
     lava_size: float = 0.5
     hole_size: float = 0.5
+    agent_u_range: float = 10.0
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -148,6 +149,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             name="agent_0",
             size=self.config.spawn_config.agent_size,
             color=Color.SKY_BLUE.name,
+            u_range=self.config.spawn_config.agent_u_range,
         )
         return [agent]
 
