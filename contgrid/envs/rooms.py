@@ -487,6 +487,7 @@ class RoomsEnv(
         world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
         render_mode: str | None = None,
+        action_config: ActionModeConfig = DEFAULT_ACTION_CONFIG,
         verbose: bool = False,
     ) -> None:
         if isinstance(scenario_config, dict):
@@ -500,6 +501,7 @@ class RoomsEnv(
             scenario,
             render_config=render_config,
             render_mode=render_mode,
+            action_config=action_config,
             local_ratio=None,
             verbose=verbose,
         )
