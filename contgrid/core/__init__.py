@@ -1,3 +1,12 @@
+from .action import (
+    DEFAULT_ACTION_MODE_CONFIG,
+    ActionMode,
+    ActionModeConfig,
+    ContinuousFullVelocity,
+    ContinuousMinimalVelocity,
+    DiscreteDirectionVelocity,
+    DiscreteMinimalVelocity,
+)
 from .agent import Agent, AgentState
 from .const import Color
 from .entities import Entity, EntityShape, EntityState, Landmark
@@ -23,4 +32,11 @@ __all__ = [
     "World",
     "WorldConfig",
     "DEFAULT_WORLD_CONFIG",
+    "ActionMode",
+    "ActionModeConfig",
+    "ContinuousFullVelocity",
+    "ContinuousMinimalVelocity",
+    "DiscreteMinimalVelocity",
+    "DiscreteDirectionVelocity",
+    "DEFAULT_ACTION_MODE_CONFIG",
 ]

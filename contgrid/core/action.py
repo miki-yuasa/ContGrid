@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Generic
+from typing import Any, Generic
 
 import numpy as np
 from gymnasium.core import ActType
 from gymnasium.spaces import Box, MultiDiscrete, Space
 from numpy.typing import NDArray
+from pydantic import BaseModel, ConfigDict
 
 from .agent import Agent
 from .world import World
@@ -35,6 +36,16 @@ class ActionMode(Generic[ActType], ABC):
     def dim(self, agent: Agent) -> int:
         space_shape: tuple[int, ...] | None = self.define_action_space(agent).shape
         return space_shape[0] if space_shape is not None else 0
+
+
+class ActionModeConfig(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    action_mode: type[ActionMode] | str = "continuous_minimal_velocity"
+    action_mode_kwargs: dict[str, Any] = {}
+
+
+DEFAULT_ACTION_MODE_CONFIG = ActionModeConfig()
 
 
 class ContinuousMinimalVelocity(ActionMode[NDArray[np.float64]]):

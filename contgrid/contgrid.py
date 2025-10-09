@@ -13,7 +13,9 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
 from contgrid.core.action import (
+    DEFAULT_ACTION_MODE_CONFIG,
     ActionMode,
+    ActionModeConfig,
     ContinuousFullVelocity,
     ContinuousMinimalVelocity,
     DiscreteDirectionVelocity,
@@ -62,11 +64,6 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         "render_fps": 10,
     }
 
-    continuous_modes: list[ActionOption] = [
-        ActionOption.CONTINUOUS,
-        ActionOption.CONTINUOUS_MINIMAL,
-    ]
-
     native_action_modes: dict[str, type[ActionMode]] = {
         ContinuousMinimalVelocity.name: ContinuousMinimalVelocity,
         ContinuousFullVelocity.name: ContinuousFullVelocity,
@@ -79,13 +76,14 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         max_cycles: int | None = None,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
-        action_mode: str | type[ActionMode] = "continuous_minimal_velocity",
-        action_mode_kwargs: dict[str, Any] = {},
+        action_mode_config: ActionModeConfig = DEFAULT_ACTION_MODE_CONFIG,
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
         super().__init__()
 
+        action_mode: str | type[ActionMode] = action_mode_config.action_mode
+        action_mode_kwargs: dict[str, Any] = action_mode_config.action_mode_kwargs
         match action_mode:
             case str():
                 if action_mode not in self.native_action_modes:
@@ -249,22 +247,6 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
     def _execute_world_step(self):
         # set action for each agent
         for i, agent in enumerate(self.world.agents):
-            # action = self.current_actions[i]
-            # scenario_action: list[NDArray | int | np.integer | ActType] = []
-            # if agent.movable:
-            #     mdim = self.movable_agent_action_dim(self.action_opt)
-            #     if self.action_opt in self.continuous_modes:
-            #         assert isinstance(action, np.ndarray)
-            #         scenario_action.append(action[0:mdim])
-            #         action = action[mdim:]
-            #     else:
-            #         assert isinstance(action, int) or isinstance(action, np.integer)
-            #         scenario_action.append(action % mdim)
-            #         action //= mdim
-            # if not agent.silent:
-            #     assert action
-            #     scenario_action.append(action)
-            # self._set_action(scenario_action, agent, self.action_spaces[agent.name])
             self.action_mode.update_agent_action(
                 agent, self.current_actions[i], self.world
             )
@@ -286,53 +268,6 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
                 reward = agent_reward
 
             self.rewards[agent.name] = reward
-
-    # set env action for a particular agent
-    # def _set_action(
-    #     self,
-    #     action: list[NDArray | int | np.integer | ActType],
-    #     agent: Agent,
-    #     action_space,
-    #     time=None,
-    # ):
-    #     agent.action.u = np.zeros(self.world.dim_p)
-    #     agent.action.c = np.zeros(self.world.dim_c)
-
-    #     if agent.movable:
-    #         # physical action
-    #         agent.action.u = np.zeros(self.world.dim_p)
-    #         match self.action_opt:
-    #             case "continuous":
-    #                 assert isinstance(action[0], np.ndarray)
-    #                 agent.action.u[0] += action[0][2] - action[0][1]
-    #                 agent.action.u[1] += action[0][4] - action[0][3]
-    #             case "continuous-minimal":
-    #                 assert isinstance(action[0], np.ndarray)
-    #                 agent.action.u[0] += action[0][0]
-    #                 agent.action.u[1] += action[0][1]
-    #             case "discrete":
-    #                 if action[0] == 1:
-    #                     agent.action.u[0] = -1.0
-    #                 if action[0] == 2:
-    #                     agent.action.u[0] = +1.0
-    #                 if action[0] == 3:
-    #                     agent.action.u[1] = -1.0
-    #                 if action[0] == 4:
-    #                     agent.action.u[1] = +1.0
-
-    #         agent.action.u *= agent.accel
-    #         action = action[1:]
-    #     if not agent.silent:
-    #         # communication action
-    #         if self.action_opt in self.continuous_modes:
-    #             assert isinstance(action[0], np.ndarray)
-    #             agent.action.c = action[0]
-    #         else:
-    #             agent.action.c = np.zeros(self.world.dim_c)
-    #             agent.action.c[action[0]] = 1.0
-    #         action = action[1:]
-    #     # make sure we used all elements of action
-    #     assert len(action) == 0
 
     def _was_dead_step(self, action: ActType) -> None:
         """Helper function that performs step() for dead agents.
@@ -558,7 +493,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
         render_mode: str | None = None,
-        action_mode: str | type[ActionMode] = "continuous_minimal_velocity",
+        action_mode_config: ActionModeConfig = DEFAULT_ACTION_MODE_CONFIG,
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
@@ -566,13 +501,16 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
             render_config = render_config.model_copy(
                 update={"render_mode": render_mode}
             )
+        if isinstance(action_mode_config, dict):
+            action_mode_config = ActionModeConfig.model_validate(action_mode_config)
+
         self.scenario: BaseScenario[ScenarioConfigT, ObsType] = scenario
         self.world: World = self.scenario.make_world(verbose=verbose)
         self.env = BaseEnv(
             self.scenario,
             max_cycles=None,
             render_config=render_config,
-            action_mode=action_mode,
+            action_mode_config=action_mode_config,
             local_ratio=local_ratio,
         )
         self.action_spaces = self.env.action_spaces
