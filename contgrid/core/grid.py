@@ -293,6 +293,25 @@ class WallCollisionChecker:
         final_x = curr_x + safe_t * dx
         final_y = curr_y + safe_t * dy
 
+        # If safe_t is very small, we might end up not moving at all
+        # Check if we can move along one axis e.g. slide along the wall
+        if safe_t < 1e-6:
+            # Try moving only in x direction
+            test_pos_x = (new_x, curr_y)
+            if self.is_position_valid(R, allowed_overlap, test_pos_x):
+                final_x = new_x
+                final_y = curr_y
+            else:
+                # Try moving only in y direction
+                test_pos_y = (curr_x, new_y)
+                if self.is_position_valid(R, allowed_overlap, test_pos_y):
+                    final_x = curr_x
+                    final_y = new_y
+                else:
+                    # Cannot move in either direction, stay put
+                    final_x = curr_x
+                    final_y = curr_y
+
         return (final_x, final_y)
 
     def _find_wall_collision_parameter(
