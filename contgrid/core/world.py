@@ -87,7 +87,7 @@ class World:  # multi-agent world
                 density=1000,
                 color=Color.GREY.name,
                 max_speed=None,
-                accel=None,
+                accel=0.0,
                 state=EntityState(
                     pos=np.array([x, y], dtype=np.float64),
                     vel=None,
