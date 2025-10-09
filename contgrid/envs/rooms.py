@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 from contgrid.contgrid import DEFAULT_RENDER_CONFIG, BaseGymEnv, RenderConfig
 from contgrid.core import (
+    DEFAULT_ACTION_CONFIG,
+    ActionModeConfig,
     Agent,
     BaseScenario,
     Color,
@@ -433,6 +435,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
 class RoomsEnvConfig(BaseModel):
     scenario_config: RoomsScenarioConfig = DEFAULT_ROOMS_SCENARIO_CONFIG
+    action_config: ActionModeConfig = DEFAULT_ACTION_CONFIG
     world_config: WorldConfig = DEFAULT_WORLD_CONFIG
     render_config: RenderConfig = DEFAULT_RENDER_CONFIG
 

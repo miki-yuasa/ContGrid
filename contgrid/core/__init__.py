@@ -1,5 +1,5 @@
 from .action import (
-    DEFAULT_ACTION_MODE_CONFIG,
+    DEFAULT_ACTION_CONFIG,
     ActionMode,
     ActionModeConfig,
     ContinuousFullVelocity,
@@ -38,5 +38,5 @@ __all__ = [
     "ContinuousMinimalVelocity",
     "DiscreteMinimalVelocity",
     "DiscreteDirectionVelocity",
-    "DEFAULT_ACTION_MODE_CONFIG",
+    "DEFAULT_ACTION_CONFIG",
 ]

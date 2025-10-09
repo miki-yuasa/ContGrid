@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from pprint import pprint
 from typing import Any, Generic
 
 import numpy as np
@@ -45,7 +46,7 @@ class ActionModeConfig(BaseModel):
     action_mode_kwargs: dict[str, Any] = {}
 
 
-DEFAULT_ACTION_MODE_CONFIG = ActionModeConfig()
+DEFAULT_ACTION_CONFIG = ActionModeConfig()
 
 
 class ContinuousMinimalVelocity(ActionMode[NDArray[np.float64]]):

@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
 from contgrid.core.action import (
-    DEFAULT_ACTION_MODE_CONFIG,
+    DEFAULT_ACTION_CONFIG,
     ActionMode,
     ActionModeConfig,
     ContinuousFullVelocity,
@@ -76,14 +76,14 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         max_cycles: int | None = None,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
-        action_mode_config: ActionModeConfig = DEFAULT_ACTION_MODE_CONFIG,
+        action_config: ActionModeConfig = DEFAULT_ACTION_CONFIG,
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
         super().__init__()
 
-        action_mode: str | type[ActionMode] = action_mode_config.action_mode
-        action_mode_kwargs: dict[str, Any] = action_mode_config.action_mode_kwargs
+        action_mode: str | type[ActionMode] = action_config.action_mode
+        action_mode_kwargs: dict[str, Any] = action_config.action_mode_kwargs
         match action_mode:
             case str():
                 if action_mode not in self.native_action_modes:
@@ -493,7 +493,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
         render_mode: str | None = None,
-        action_mode_config: ActionModeConfig = DEFAULT_ACTION_MODE_CONFIG,
+        action_config: ActionModeConfig = DEFAULT_ACTION_CONFIG,
         local_ratio: float | None = None,
         verbose: bool = False,
     ):
@@ -501,8 +501,8 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
             render_config = render_config.model_copy(
                 update={"render_mode": render_mode}
             )
-        if isinstance(action_mode_config, dict):
-            action_mode_config = ActionModeConfig.model_validate(action_mode_config)
+        if isinstance(action_config, dict):
+            action_config = ActionModeConfig.model_validate(action_config)
 
         self.scenario: BaseScenario[ScenarioConfigT, ObsType] = scenario
         self.world: World = self.scenario.make_world(verbose=verbose)
@@ -510,7 +510,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
             self.scenario,
             max_cycles=None,
             render_config=render_config,
-            action_mode_config=action_mode_config,
+            action_config=action_config,
             local_ratio=local_ratio,
         )
         self.action_spaces = self.env.action_spaces
