@@ -51,5 +51,5 @@ __all__ = [
 gym.register(
     id="contgrid/Rooms-v0",
     entry_point="contgrid.envs.rooms:RoomsEnv",
-    max_episode_steps=500,
+    max_episode_steps=250,
 )
