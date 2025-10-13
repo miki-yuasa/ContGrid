@@ -426,6 +426,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             "goal": d_gl,
         } | doorway_distances
 
+        # Success info
+        info_dict["is_success"] = d_gl < self.goal_thr_dist
+
         return info_dict
 
     def _get_doorway_distances(self, agent: Agent) -> NDArray[np.float64]:
