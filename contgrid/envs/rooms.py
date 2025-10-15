@@ -86,6 +86,9 @@ class SpawnConfig(BaseModel):
     goal_size: float = 0.5
     lava_size: float = 0.5
     hole_size: float = 0.5
+    goal_thr_dist: float | None = None
+    lava_thr_dist: float | None = None
+    hole_thr_dist: float | None = None
     agent_u_range: float = 10.0
 
     model_config = {"arbitrary_types_allowed": True}
@@ -126,14 +129,21 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
     ) -> None:
         super().__init__(config, world_config)
         self.goal_thr_dist: float = (
-            config.spawn_config.goal_size + config.spawn_config.agent_size / 2
+            (config.spawn_config.goal_size + config.spawn_config.agent_size / 2)
+            if config.spawn_config.goal_thr_dist is None
+            else config.spawn_config.goal_thr_dist
         )
         self.lava_thr_dist: float = (
-            config.spawn_config.lava_size + config.spawn_config.agent_size / 2
+            (config.spawn_config.lava_size + config.spawn_config.agent_size / 2)
+            if config.spawn_config.lava_thr_dist is None
+            else config.spawn_config.lava_thr_dist
         )
         self.hole_thr_dist: float = (
-            config.spawn_config.hole_size + config.spawn_config.agent_size / 2
+            (config.spawn_config.hole_size + config.spawn_config.agent_size / 2)
+            if config.spawn_config.hole_thr_dist is None
+            else config.spawn_config.hole_thr_dist
         )
+
         self.doorways: dict[str, NDArray[np.float64]] = {
             name: np.array(pos, dtype=np.float64)
             for name, pos in config.spawn_config.doorways.items()
