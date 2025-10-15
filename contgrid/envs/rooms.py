@@ -126,13 +126,13 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
     ) -> None:
         super().__init__(config, world_config)
         self.goal_thr_dist: float = (
-            config.spawn_config.goal_size + config.spawn_config.agent_size / 1
+            config.spawn_config.goal_size + config.spawn_config.agent_size / 2
         )
         self.lava_thr_dist: float = (
-            config.spawn_config.lava_size + config.spawn_config.agent_size / 1
+            config.spawn_config.lava_size + config.spawn_config.agent_size / 2
         )
         self.hole_thr_dist: float = (
-            config.spawn_config.hole_size + config.spawn_config.agent_size / 1
+            config.spawn_config.hole_size + config.spawn_config.agent_size / 2
         )
         self.doorways: dict[str, NDArray[np.float64]] = {
             name: np.array(pos, dtype=np.float64)
