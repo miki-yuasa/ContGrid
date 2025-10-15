@@ -126,13 +126,13 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
     ) -> None:
         super().__init__(config, world_config)
         self.goal_thr_dist: float = (
-            config.spawn_config.goal_size + config.spawn_config.agent_size / 1.5
+            config.spawn_config.goal_size + config.spawn_config.agent_size / 1
         )
         self.lava_thr_dist: float = (
-            config.spawn_config.lava_size + config.spawn_config.agent_size / 1.5
+            config.spawn_config.lava_size + config.spawn_config.agent_size / 1
         )
         self.hole_thr_dist: float = (
-            config.spawn_config.hole_size + config.spawn_config.agent_size / 1.5
+            config.spawn_config.hole_size + config.spawn_config.agent_size / 1
         )
         self.doorways: dict[str, NDArray[np.float64]] = {
             name: np.array(pos, dtype=np.float64)
@@ -428,6 +428,11 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         # Success info
         info_dict["is_success"] = d_gl < self.goal_thr_dist
+        info_dict["thresholds"] = {
+            "goal": self.goal_thr_dist,
+            "lava": self.lava_thr_dist,
+            "hole": self.hole_thr_dist,
+        }
 
         return info_dict
 
