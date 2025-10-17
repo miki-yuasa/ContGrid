@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
 from .const import Color
-from .entities import Entity, EntityShape, EntityState
+from .entities import Entity, EntityShape, EntityState, ResetConfig
 
 CallbackT = TypeVar("CallbackT")
 
@@ -84,6 +84,7 @@ class Agent(Entity[AgentState], Generic[CallbackT]):  # properties of agent enti
         accel: float = 5.0,
         state: AgentState = AgentState(),
         initial_mass: float = 1,
+        reset_config: ResetConfig = ResetConfig(),
         silent: bool = True,
         blind: bool = False,
         u_noise: float | None = None,
@@ -105,6 +106,7 @@ class Agent(Entity[AgentState], Generic[CallbackT]):  # properties of agent enti
             accel,
             state,
             initial_mass,
+            reset_config=reset_config,
         )
         # agents are movable by default
         # cannot send communication signals
@@ -123,4 +125,8 @@ class Agent(Entity[AgentState], Generic[CallbackT]):  # properties of agent enti
         self.action_callback = action_callback
 
         # whether the agent has finished its task
+        self.terminated = False
+
+    def reset(self, np_random: np.random.Generator) -> None:
+        super().reset(np_random)
         self.terminated = False

@@ -3,8 +3,10 @@ from typing import Generic, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
+from pydantic import BaseModel, ConfigDict
 
 from .const import Color
+from .typing import Position
 
 
 class EntityState:  # physical/external base state of all entities
@@ -42,6 +44,12 @@ EntityStateT = TypeVar("EntityStateT", bound=EntityState, covariant=True)
 class EntityShape(Enum):
     CIRCLE = auto()
     SQUARE = auto()
+
+
+class ResetConfig(BaseModel):
+    spawn_positions: Position | list[Position] = []
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class Entity(Generic[EntityStateT]):  # properties and state of physical world entity
@@ -87,6 +95,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
     state: EntityStateT
     initial_mass: float
     hatch: str
+    reset_config: ResetConfig
 
     def __init__(
         self,
@@ -103,6 +112,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         state: EntityStateT = EntityState(),
         initial_mass: float = 1.0,
         hatch: str = "",
+        reset_config: ResetConfig = ResetConfig(),
     ):
         # name
         self.name = name
@@ -130,9 +140,29 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         # hatch pattern for rendering
         self.hatch = hatch
 
+        # reset configuration with some randomization options
+        self.reset_config = reset_config
+
     @property
     def mass(self):
         return self.initial_mass
+
+    def reset(self, np_random: np.random.Generator) -> None:
+        """Reset the entity state based on reset configuration."""
+        spawn_positions = self.reset_config.spawn_positions
+        if isinstance(spawn_positions, list) and spawn_positions:
+            chosen_pos = np_random.choice(len(spawn_positions))
+            pos = spawn_positions[chosen_pos]
+            self.state.pos = np.array([pos[0], pos[1]], dtype=np.float64)
+        elif isinstance(spawn_positions, tuple) and spawn_positions:
+            self.state.pos = np.array(
+                [spawn_positions[0], spawn_positions[1]], dtype=np.float64
+            )
+        # Reset velocity and angular velocity
+        self.state.vel = np.array([0.0, 0.0], dtype=np.float64)
+        self.state.ang_vel = 0.0
+        # Reset rotation
+        self.state.rot = 0.0
 
 
 class Landmark(Entity[EntityState]):  # properties of landmark entities
@@ -151,6 +181,7 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
         state: EntityState = EntityState(),
         initial_mass: float = 1,
         hatch: str = "",
+        reset_config: ResetConfig = ResetConfig(),
     ):
         super().__init__(
             name,
@@ -166,4 +197,5 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
             state,
             initial_mass,
             hatch,
+            reset_config,
         )
