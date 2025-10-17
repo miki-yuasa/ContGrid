@@ -2,7 +2,14 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
+from .typing import CellPosition
+
 Layout = list[str] | list[list[str]]
+
+
+def rc2cell_pos(rc: tuple[int, int], grid_height: int) -> CellPosition:
+    """Convert row-column indices to cell position (x, y) in grid coordinates."""
+    return (rc[1], grid_height - 1 - rc[0])
 
 
 class WallLimits(BaseModel):

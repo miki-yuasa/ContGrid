@@ -10,7 +10,7 @@ from .action import (
 from .agent import Agent, AgentState
 from .const import Color
 from .entities import Entity, EntityShape, EntityState, Landmark, ResetConfig, SpawnPos
-from .grid import Grid
+from .grid import DEFAULT_GRID, Grid, WallCollisionChecker, WallLimits, rc2cell_pos
 from .scenario import BaseScenario, ScenarioConfigT
 from .world import (
     DEFAULT_WORLD_CONFIG,
@@ -30,9 +30,10 @@ __all__ = [
     "Landmark",
     "ResetConfig",
     "ScenarioConfigT",
+    "WallCollisionChecker",
+    "WallLimits",
     "World",
     "WorldConfig",
-    "DEFAULT_WORLD_CONFIG",
     "ActionMode",
     "SpawnPos",
     "ActionModeConfig",
@@ -41,4 +42,7 @@ __all__ = [
     "DiscreteMinimalVelocity",
     "DiscreteDirectionVelocity",
     "DEFAULT_ACTION_CONFIG",
+    "DEFAULT_GRID",
+    "DEFAULT_WORLD_CONFIG",
+    "rc2cell_pos",
 ]

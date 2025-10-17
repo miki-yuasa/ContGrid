@@ -21,6 +21,7 @@ from contgrid.core import (
     SpawnPos,
     World,
     WorldConfig,
+    rc2cell_pos,
 )
 from contgrid.core.typing import CellPosition, Position
 
@@ -123,11 +124,6 @@ DEFAULT_WORLD_CONFIG = WorldConfig(
         ]
     )
 )
-
-
-def rc2cell_pos(rc: tuple[int, int], grid_height: int) -> CellPosition:
-    """Convert row-column indices to cell position (x, y) in grid coordinates."""
-    return (rc[1], grid_height - 1 - rc[0])
 
 
 class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float64]]]):
