@@ -1,12 +1,12 @@
 from enum import Enum, auto
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
 from .const import Color
-from .typing import Position
+from .typing import CellPosition, Position
 
 
 class EntityState:  # physical/external base state of all entities
@@ -46,8 +46,11 @@ class EntityShape(Enum):
     SQUARE = auto()
 
 
+SpawnPos = Position | list[Position] | CellPosition | list[CellPosition] | None
+
+
 class ResetConfig(BaseModel):
-    spawn_positions: Position | list[Position] = []
+    spawn_pos: SpawnPos = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -147,17 +150,18 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
     def mass(self):
         return self.initial_mass
 
-    def reset(self, np_random: np.random.Generator) -> None:
+    def reset(
+        self, np_random: np.random.Generator, options: dict[str, Any] = {}
+    ) -> None:
         """Reset the entity state based on reset configuration."""
-        spawn_positions = self.reset_config.spawn_positions
-        if isinstance(spawn_positions, list) and spawn_positions:
-            chosen_pos = np_random.choice(len(spawn_positions))
-            pos = spawn_positions[chosen_pos]
+        reset_config: ResetConfig = self.reset_config.model_copy(update=options)
+        spawn_pos: Position | list[Position] = reset_config.spawn_pos
+        if isinstance(spawn_pos, list) and spawn_pos:
+            chosen_pos = np_random.choice(len(spawn_pos))
+            pos = spawn_pos[chosen_pos]
             self.state.pos = np.array([pos[0], pos[1]], dtype=np.float64)
-        elif isinstance(spawn_positions, tuple) and spawn_positions:
-            self.state.pos = np.array(
-                [spawn_positions[0], spawn_positions[1]], dtype=np.float64
-            )
+        elif isinstance(spawn_pos, tuple) and spawn_pos:
+            self.state.pos = np.array([spawn_pos[0], spawn_pos[1]], dtype=np.float64)
         # Reset velocity and angular velocity
         self.state.vel = np.array([0.0, 0.0], dtype=np.float64)
         self.state.ang_vel = 0.0

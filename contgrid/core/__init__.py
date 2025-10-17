@@ -9,7 +9,7 @@ from .action import (
 )
 from .agent import Agent, AgentState
 from .const import Color
-from .entities import Entity, EntityShape, EntityState, Landmark
+from .entities import Entity, EntityShape, EntityState, Landmark, ResetConfig, SpawnPos
 from .grid import Grid
 from .scenario import BaseScenario, ScenarioConfigT
 from .world import (
@@ -28,11 +28,13 @@ __all__ = [
     "EntityState",
     "Grid",
     "Landmark",
+    "ResetConfig",
     "ScenarioConfigT",
     "World",
     "WorldConfig",
     "DEFAULT_WORLD_CONFIG",
     "ActionMode",
+    "SpawnPos",
     "ActionModeConfig",
     "ContinuousFullVelocity",
     "ContinuousMinimalVelocity",

@@ -58,6 +58,7 @@ class BaseScenario(
     def reset_world(
         self, world: World, np_random: np.random.Generator
     ) -> None:  # create initial conditions of the world
+        self._pre_reset_world(world, np_random)
         # reset landmarks
         world.landmarks = self.reset_landmarks(world, np_random)
         # reset agents
@@ -79,6 +80,9 @@ class BaseScenario(
 
     @abstractmethod
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
+        pass
+
+    def _pre_reset_world(self, world: World, np_random: np.random.Generator) -> None:
         pass
 
     def global_reward(self, world: World) -> float:

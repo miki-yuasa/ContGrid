@@ -1,8 +1,9 @@
 from pprint import pprint
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 from gymnasium import spaces
+from matplotlib.pylab import Generator
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
@@ -16,11 +17,12 @@ from contgrid.core import (
     EntityState,
     Grid,
     Landmark,
+    ResetConfig,
+    SpawnPos,
     World,
     WorldConfig,
 )
-
-Position = tuple[float, float]
+from contgrid.core.typing import CellPosition, Position
 
 
 class RewardConfig(BaseModel):
@@ -29,7 +31,9 @@ class RewardConfig(BaseModel):
 
 
 class ObjConfig(BaseModel):
-    pos: Position | None = None  # Default position indicating no specific position
+    pos: Position | list[Position] | None = (
+        None  # Default position indicating no specific position
+    )
     reward: float = 0.0
     absorbing: bool = False
 
@@ -121,6 +125,11 @@ DEFAULT_WORLD_CONFIG = WorldConfig(
 )
 
 
+def rc2cell_pos(rc: tuple[int, int], grid_height: int) -> CellPosition:
+    """Convert row-column indices to cell position (x, y) in grid coordinates."""
+    return (rc[1], grid_height - 1 - rc[0])
+
+
 class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float64]]]):
     def __init__(
         self,
@@ -165,6 +174,11 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
     def init_landmarks(self, world: World, np_random=None) -> list[Landmark]:
         assert self.config
+        self.init_free_cells: list[CellPosition] = [
+            rc2cell_pos((p[0], p[1]), world.grid.height_cells)
+            for p in np.argwhere(world.numeric_grid == 0).tolist()
+        ]
+
         # Initialize the goal
         self.goal = Landmark(
             name="goal",
@@ -173,6 +187,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             color=Color.GREEN.name,
             state=EntityState(
                 pos=np.array(self.config.spawn_config.goal.pos, dtype=np.float64)
+            ),
+            reset_config=ResetConfig(
+                spawn_pos=self._format_spawn_pos(self.config.spawn_config.goal.pos)
             ),
         )
 
@@ -185,6 +202,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 color=Color.ORANGE.name,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
                 hatch="//" if config.reward < 0 else "",
+                reset_config=ResetConfig(spawn_pos=self._format_spawn_pos(config.pos)),
             )
             for i, config in enumerate(self.config.spawn_config.lavas)
         ]
@@ -198,6 +216,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 collide=False,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
                 hatch="//" if config.reward < 0 else "",
+                reset_config=ResetConfig(spawn_pos=self._format_spawn_pos(config.pos)),
             )
             for i, config in enumerate(self.config.spawn_config.holes)
         ]
@@ -205,56 +224,109 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         return landmarks
 
+    def _format_spawn_pos(
+        self, spawn_pos: SpawnPos
+    ) -> CellPosition | list[CellPosition] | None:
+        match spawn_pos:
+            case list():
+                return [(int(pos[0]), int(pos[1])) for pos in spawn_pos]
+            case tuple():
+                return (int(spawn_pos[0]), int(spawn_pos[1]))
+            case None:
+                return None
+            case _:
+                raise ValueError("Invalid spawn_pos type")
+
+    def _pre_reset_world(self, world: World, np_random: Generator) -> None:
+        self.free_cells: list[CellPosition] = self.init_free_cells.copy()
+
     def reset_agents(self, world: World, np_random: np.random.Generator) -> list[Agent]:
         assert self.config
         for agent in world.agents:
-            agent.terminated = False
+            agent.reset(np_random)
             if self.config.spawn_config.agent is not None:
                 agent.state.pos = np.array(
                     self.config.spawn_config.agent, dtype=np.float64
                 )
             else:
-                # Randomly place the agent in a free cell
-                free_cells = np.argwhere(world.numeric_grid == 0)
-
                 # Ensure the new position is not inside other landmarks
-                min_dist_to_landmark = -1
-                while min_dist_to_landmark < 0:
-                    chosen_cell = free_cells[np_random.choice(len(free_cells))]
-                    new_pos_x = chosen_cell[1]
-                    new_pos_y = world.grid.height_cells - 1 - chosen_cell[0]
-                    new_pos = np.array([new_pos_x, new_pos_y], dtype=np.float64)
-                    min_dist_to_landmark = np.min(
-                        [
-                            np.linalg.norm(new_pos - lm.state.pos)
-                            - lm.size
-                            - agent.size
-                            for lm in world.landmarks
-                        ]
-                    )
-                agent.state.pos = np.array([new_pos_x, new_pos_y], dtype=np.float64)
-            agent.state.vel = np.array([0.0, 0.0], dtype=np.float64)
+                chose_cell_idx = np_random.choice(len(self.free_cells))
+                new_pos: CellPosition = self.free_cells[chose_cell_idx]
+
+                agent.state.pos = np.array([new_pos[0], new_pos[1]], dtype=np.float64)
+
+                # Remove the chosen cell from free cells
+                self.free_cells.pop(chose_cell_idx)
+
         return world.agents
 
     def reset_landmarks(
         self, world: World, np_random: np.random.Generator
     ) -> list[Landmark]:
-        # Landmarks are static; no need to reset positions
-        lava_pos: list[Position] = [
-            (lava.state.pos[0], lava.state.pos[1]) for lava in self.lavas
-        ]
-        hole_pos: list[Position] = [
-            (hole.state.pos[0], hole.state.pos[1]) for hole in self.holes
-        ]
+        # Landmarks can have multiple possible positions given in the config as a list
+        # If so, randomly choose one of the positions for each landmark
+        goal_pos: CellPosition = self._choose_new_pos(
+            self.goal.reset_config.spawn_pos, self.free_cells, np_random
+        )
+
+        lava_pos: list[Position] = []
+        for lava in self.lavas:
+            new_pos: CellPosition = self._choose_new_pos(
+                lava.reset_config.spawn_pos, self.free_cells, np_random
+            )
+            lava.state.pos = np.array([new_pos[0], new_pos[1]], dtype=np.float64)
+            lava_pos.append(new_pos)
+            # Remove the chosen cell from free cells
+            self.free_cells.remove(new_pos)
+
+        hole_pos: list[Position] = []
+        for hole in self.holes:
+            new_pos: CellPosition = self._choose_new_pos(
+                hole.reset_config.spawn_pos, self.free_cells, np_random
+            )
+            hole.state.pos = np.array([new_pos[0], new_pos[1]], dtype=np.float64)
+            hole_pos.append(new_pos)
+            # Remove the chosen cell from free cells
+            self.free_cells.remove(new_pos)
+
         self.lava_pos: NDArray[np.float64] = np.array(lava_pos, dtype=np.float64)
         self.hole_pos: NDArray[np.float64] = np.array(hole_pos, dtype=np.float64)
         self.goal_pos: NDArray[np.float64] = np.array(
-            (self.goal.state.pos[0], self.goal.state.pos[1]), dtype=np.float64
+            (goal_pos[0], goal_pos[1]), dtype=np.float64
         )
-        self.world_pos: NDArray[np.float64] = np.array(
+        self.wall_pos: NDArray[np.float64] = np.array(
             world.wall_collision_checker.wall_centers, dtype=np.float64
         )
         return world.landmarks
+
+    @classmethod
+    def _choose_new_pos(
+        cls, spawn_pos: SpawnPos, free_cells: list[CellPosition], np_random: Generator
+    ) -> CellPosition:
+        new_pos: CellPosition
+        match spawn_pos:
+            case tuple() as pos:
+                new_pos = (int(pos[0]), int(pos[1]))
+
+            case list() as pos_list if pos_list:
+                cell_pos_list: list[CellPosition] = pos_list  # type: ignore
+                # Get the available positions that are still free
+                available_pos: list[CellPosition] = list(
+                    set(cell_pos_list) & set(free_cells)
+                )
+                if available_pos:
+                    chose_cell_idx = np_random.choice(len(available_pos))
+                    new_pos = available_pos[chose_cell_idx]
+
+                else:  # Choose from a free cell
+                    chose_cell_idx = np_random.choice(len(free_cells))
+                    new_pos = free_cells[chose_cell_idx]
+            case None:
+                chose_cell_idx = np_random.choice(len(free_cells))
+                new_pos = free_cells[chose_cell_idx]
+            case _:
+                raise ValueError("Invalid spawn_pos type")
+        return new_pos
 
     def get_closest(
         self, pos: NDArray[np.float64], objects: NDArray[np.float64]
@@ -290,7 +362,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["goal_pos"] = self.goal_pos.copy() - agent.state.pos.copy()
         obs["lava_pos"] = self.lava_pos.copy() - agent.state.pos.copy()
         obs["hole_pos"] = self.hole_pos.copy() - agent.state.pos.copy()
-        # obs["wall_pos"] = self.world_pos.copy() - agent.state.pos.copy()
+        # obs["wall_pos"] = self.wall_pos.copy() - agent.state.pos.copy()
         obs["doorway_pos"] = self.doorway_pos.copy() - agent.state.pos.copy()
         # Distance to the goal
         obs["goal_dist"] = np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
@@ -300,7 +372,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         # Distance to the closest hole
         hole_dist, _ = self.get_closest(agent.state.pos, self.hole_pos)
         obs["hole_dist"] = np.array([hole_dist], dtype=np.float64)
-        wall_dist, _ = self.get_closest(agent.state.pos, self.world_pos)
+        wall_dist, _ = self.get_closest(agent.state.pos, self.wall_pos)
         obs["wall_dist"] = np.array([wall_dist], dtype=np.float64)
         obs["doorway_dist"] = self._get_doorway_distances(agent)
 
