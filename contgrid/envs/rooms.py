@@ -264,6 +264,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         goal_pos: CellPosition = self._choose_new_pos(
             self.goal.reset_config.spawn_pos, self.free_cells, np_random
         )
+        self.free_cells.remove(goal_pos)
 
         lava_pos: list[Position] = []
         for lava in self.lavas:

@@ -1,4 +1,4 @@
-from typing import Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -127,6 +127,8 @@ class Agent(Entity[AgentState], Generic[CallbackT]):  # properties of agent enti
         # whether the agent has finished its task
         self.terminated = False
 
-    def reset(self, np_random: np.random.Generator) -> None:
+    def reset(
+        self, np_random: np.random.Generator, options: dict[str, Any] = {}
+    ) -> None:
         super().reset(np_random)
         self.terminated = False

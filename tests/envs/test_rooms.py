@@ -1,3 +1,7 @@
+import os
+from pprint import pprint
+
+import imageio
 import numpy as np
 import pytest
 from gymnasium import spaces
@@ -371,11 +375,8 @@ class TestRoomsScenario:
 
     def test_animation_random_actions(self):
         """Test creating and saving an animation of random actions"""
-        import os
 
-        import imageio
-
-        env = RoomsEnv(max_episode_steps=100)
+        env = RoomsEnv()
         observation, info = env.reset(seed=42)
 
         frames = []
@@ -467,6 +468,250 @@ class TestRoomsScenario:
         print(f"Position change: {np.linalg.norm(positions[-1] - positions[0]):.3f}")
 
         env.close()
+
+    def test_random_spawn(self):
+        """Test that agent and objects spawn within valid room boundaries"""
+        plot_save_path: str = "tests/out/rooms_random_spawn.png"
+        spawn_config: SpawnConfig = SpawnConfig(
+            agent=(3.0, 3.0),
+            goal=ObjConfig(pos=(9, 8), reward=1.0, absorbing=False),
+            lavas=[
+                ObjConfig(
+                    pos=[
+                        (3, 5),
+                        (2, 4),
+                        (3, 4),
+                        (4, 3),
+                        (5, 3),
+                        (4, 2),
+                    ],
+                    reward=-1.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (3, 5),
+                        (2, 4),
+                        (3, 4),
+                        (4, 3),
+                        (5, 3),
+                        (4, 2),
+                    ],
+                    reward=-1.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (2, 7),
+                        (3, 7),
+                        (3, 8),
+                        (4, 8),
+                        (5, 8),
+                        (3, 9),
+                        (4, 9),
+                        (5, 9),
+                    ],
+                    reward=0.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (2, 7),
+                        (3, 7),
+                        (3, 8),
+                        (4, 8),
+                        (5, 8),
+                        (3, 9),
+                        (4, 9),
+                        (5, 9),
+                    ],
+                    reward=0.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (7, 9),
+                        (8, 9),
+                        (9, 9),
+                        (7, 8),
+                        (8, 8),
+                        (8, 7),
+                        (9, 7),
+                        (8, 6),
+                        (9, 6),
+                    ],
+                    reward=0.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (7, 9),
+                        (8, 9),
+                        (9, 9),
+                        (7, 8),
+                        (8, 8),
+                        (8, 7),
+                        (9, 7),
+                        (8, 6),
+                        (9, 6),
+                    ],
+                    reward=0.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (8, 2),
+                        (9, 2),
+                        (7, 3),
+                        (8, 3),
+                        (9, 3),
+                        (8, 4),
+                    ],
+                    reward=-1.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (8, 2),
+                        (9, 2),
+                        (7, 3),
+                        (8, 3),
+                        (9, 3),
+                        (8, 4),
+                    ],
+                    reward=-1.0,
+                    absorbing=False,
+                ),
+            ],
+            holes=[
+                ObjConfig(
+                    pos=[
+                        (2, 5),
+                        (3, 5),
+                        (2, 4),
+                        (3, 4),
+                        (4, 3),
+                        (5, 3),
+                        (4, 2),
+                        (5, 2),
+                    ],
+                    reward=0.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (2, 5),
+                        (3, 5),
+                        (2, 4),
+                        (3, 4),
+                        (4, 3),
+                        (5, 3),
+                        (4, 2),
+                        (5, 2),
+                    ],
+                    reward=0.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (3, 7),
+                        (3, 8),
+                        (4, 8),
+                        (5, 8),
+                        (3, 9),
+                        (4, 9),
+                    ],
+                    reward=-1.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (3, 7),
+                        (3, 8),
+                        (4, 8),
+                        (5, 8),
+                        (3, 9),
+                        (4, 9),
+                    ],
+                    reward=-1.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (7, 9),
+                        (8, 9),
+                        (9, 9),
+                        (7, 8),
+                        (8, 8),
+                        (8, 7),
+                        (9, 7),
+                        (8, 6),
+                        (9, 6),
+                    ],
+                    reward=0.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (7, 9),
+                        (8, 9),
+                        (9, 9),
+                        (7, 8),
+                        (8, 8),
+                        (8, 7),
+                        (9, 7),
+                        (8, 6),
+                        (9, 6),
+                    ],
+                    reward=0.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (8, 2),
+                        (9, 2),
+                        (7, 3),
+                        (8, 3),
+                        (9, 3),
+                        (8, 4),
+                    ],
+                    reward=-1.0,
+                    absorbing=False,
+                ),
+                ObjConfig(
+                    pos=[
+                        (8, 2),
+                        (9, 2),
+                        (7, 3),
+                        (8, 3),
+                        (9, 3),
+                        (8, 4),
+                    ],
+                    reward=-1.0,
+                    absorbing=False,
+                ),
+            ],
+            doorways={
+                "ld": (2, 6),
+                "td": (6, 9),
+                "rd": (9, 5),
+                "bd": (6, 2),
+            },
+        )
+        config: RoomsScenarioConfig = RoomsScenarioConfig(spawn_config=spawn_config)
+        env = RoomsEnv(scenario_config=config)
+        observation, info = env.reset()
+        rendered = env.render()
+        os.makedirs("tests/out", exist_ok=True)
+
+        imageio.imwrite(plot_save_path, rendered)
+        print(f"Saved random spawn render to: {plot_save_path}")
+        env.close()
+
+        # Print spawn configuration in dict
+        pprint(spawn_config.model_dump())
+
+        assert os.path.exists(plot_save_path)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,7 @@ from contgrid.core.const import ALPHABET
 from contgrid.core.entities import Entity, EntityShape
 from contgrid.core.grid import Grid
 from contgrid.core.scenario import BaseScenario, ScenarioConfigT
+from contgrid.core.typing import Position
 from contgrid.core.utils import AgentSelector
 from contgrid.core.world import Agent, World
 
@@ -476,6 +477,51 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             plt.close(self.fig)
             self.fig = None
             self.ax = None
+
+    def all_possible_states(self) -> dict[str, dict[Position, ObsType]]:
+        """
+        Get all possible states for each agent in the environment.
+
+        Returns
+        -------
+        possible_states : dict[str, dict[Position, ObsType]]
+            A dictionary where each key is an agent's name and the value is another
+            dictionary mapping that agent's positions to observations for that agent.
+        """
+        possible_states: dict[str, dict[Position, ObsType]] = {}
+
+        # Get all free cells in the grid (non-wall cells)
+        layout = self.grid.layout
+        n_rows = len(layout)
+        n_cols = len(layout[0]) if layout else 0
+
+        free_positions: list[Position] = []
+        for r in range(n_rows):
+            for c in range(n_cols):
+                if layout[r][c] != "#":
+                    # Convert grid cell to continuous position (center of cell)
+                    x = c * self.grid.cell_size
+                    y = (n_rows - 1 - r) * self.grid.cell_size
+                    free_positions.append((x, y))
+
+        # For each agent, compute observations for all possible positions
+        for agent in self.world.agents:
+            agent_states: dict[Position, ObsType] = {}
+            # Store original position
+            original_pos = agent.state.pos.copy()
+
+            for pos in free_positions:
+                # Temporarily set agent to this position
+                agent.state.pos = np.array(pos, dtype=np.float64)
+                # Get observation for this position
+                obs = self.scenario.observation(agent, self.world)
+                agent_states[pos] = obs
+
+            # Restore original position
+            agent.state.pos = original_pos
+            possible_states[agent.name] = agent_states
+
+        return possible_states
 
 
 class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfigT]):

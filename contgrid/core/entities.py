@@ -154,14 +154,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         self, np_random: np.random.Generator, options: dict[str, Any] = {}
     ) -> None:
         """Reset the entity state based on reset configuration."""
-        reset_config: ResetConfig = self.reset_config.model_copy(update=options)
-        spawn_pos: Position | list[Position] = reset_config.spawn_pos
-        if isinstance(spawn_pos, list) and spawn_pos:
-            chosen_pos = np_random.choice(len(spawn_pos))
-            pos = spawn_pos[chosen_pos]
-            self.state.pos = np.array([pos[0], pos[1]], dtype=np.float64)
-        elif isinstance(spawn_pos, tuple) and spawn_pos:
-            self.state.pos = np.array([spawn_pos[0], spawn_pos[1]], dtype=np.float64)
+        self.state.pos = np.array([0.0, 0.0], dtype=np.float64)
         # Reset velocity and angular velocity
         self.state.vel = np.array([0.0, 0.0], dtype=np.float64)
         self.state.ang_vel = 0.0
