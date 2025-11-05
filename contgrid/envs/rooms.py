@@ -468,7 +468,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         # Reward for reaching the goal
         elif goal_dist < self.goal_thr_dist:
             reward = self.config.spawn_config.goal.reward
-            agent.terminated = True
+            agent.terminated = self.config.spawn_config.goal.absorbing
         # Penalty for falling into lava
         elif lava_min_dist < self.lava_thr_dist and lava_idx != -1:
             reward = self.config.spawn_config.lavas[lava_idx].reward
