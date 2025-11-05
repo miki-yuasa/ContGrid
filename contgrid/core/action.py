@@ -38,6 +38,9 @@ class ActionMode(Generic[ActType], ABC):
         space_shape: tuple[int, ...] | None = self.define_action_space(agent).shape
         return space_shape[0] if space_shape is not None else 0
 
+    def action2xy_vel(self, action: ActType, agent: Agent) -> tuple[float, float]:
+        raise NotImplementedError
+
 
 class ActionModeConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -73,12 +76,24 @@ class ContinuousMinimalVelocity(ActionMode[NDArray[np.float64]]):
         self._zero_agent_actions(agent, world)
 
         if agent.movable:
-            agent.action.u += action[0:2]
+            x_vel, y_vel = self.action2xy_vel(action, agent)
+            agent.action.u[0] += x_vel
+            agent.action.u[1] += y_vel
 
             self._apply_sensitivity(agent, agent.accel)
 
         if not agent.silent:
             agent.action.c = action[-1]
+
+    def action2xy_vel(
+        self, action: NDArray[np.float64], agent: Agent
+    ) -> tuple[float, float]:
+        if len(action) >= 2:
+            return float(action[0]), float(action[1])
+        else:
+            raise ValueError(
+                f"Action length is less than 2: {len(action)}. Cannot extract x and y velocity."
+            )
 
 
 class DiscreteMinimalVelocity(ActionMode[NDArray[np.integer]]):
@@ -111,17 +126,28 @@ class DiscreteMinimalVelocity(ActionMode[NDArray[np.integer]]):
         self._zero_agent_actions(agent, world)
 
         if agent.movable:
-            agent.action.u[0] = (
-                action[0] / self.num_discrete
-            ) * 2 * agent.u_range - agent.u_range
-            agent.action.u[1] = (
-                action[1] / self.num_discrete
-            ) * 2 * agent.u_range - agent.u_range
+            x_vel, y_vel = self.action2xy_vel(action, agent)
+            agent.action.u[0] += x_vel
+            agent.action.u[1] += y_vel
 
             self._apply_sensitivity(agent, agent.accel)
 
         if not agent.silent:
             agent.action.c = action[-1] / self.num_discrete
+
+            agent.action.u += action[0:2]
+
+    def action2xy_vel(
+        self, action: NDArray[np.integer], agent: Agent
+    ) -> tuple[float, float]:
+        if len(action) >= 2:
+            x_vel = (action[0] / self.num_discrete) * 2 * agent.u_range - agent.u_range
+            y_vel = (action[1] / self.num_discrete) * 2 * agent.u_range - agent.u_range
+            return float(x_vel), float(y_vel)
+        else:
+            raise ValueError(
+                f"Action length is less than 2: {len(action)}. Cannot extract x and y velocity."
+            )
 
 
 class ContinuousFullVelocity(ActionMode[NDArray[np.float64]]):
@@ -153,13 +179,26 @@ class ContinuousFullVelocity(ActionMode[NDArray[np.float64]]):
         self._zero_agent_actions(agent, world)
 
         if agent.movable:
-            agent.action.u[0] += action[0] - action[1]
-            agent.action.u[1] += action[2] - action[3]
+            x_vel, y_vel = self.action2xy_vel(action, agent)
+            agent.action.u[0] += x_vel
+            agent.action.u[1] += y_vel
 
             self._apply_sensitivity(agent, agent.accel)
 
         if not agent.silent:
             agent.action.c = action[-1]
+
+    def action2xy_vel(
+        self, action: NDArray[np.float64], agent: Agent
+    ) -> tuple[float, float]:
+        if len(action) >= 4:
+            x_vel = float(action[0] - action[1])
+            y_vel = float(action[2] - action[3])
+            return x_vel, y_vel
+        else:
+            raise ValueError(
+                f"Action length is less than 4: {len(action)}. Cannot extract x and y velocity."
+            )
 
 
 class DiscreteDirectionVelocity(ActionMode[NDArray[np.integer]]):
@@ -184,16 +223,88 @@ class DiscreteDirectionVelocity(ActionMode[NDArray[np.integer]]):
         self._zero_agent_actions(agent, world)
 
         if agent.movable:
-            if action[0] == 1:  # up
-                agent.action.u[1] += 1.0
-            elif action[0] == 2:  # down
-                agent.action.u[1] -= 1.0
-            elif action[0] == 3:  # left
-                agent.action.u[0] -= 1.0
-            elif action[0] == 4:  # right
-                agent.action.u[0] += 1.0
+            x_vel, y_vel = self.action2xy_vel(action, agent)
+            agent.action.u[0] += x_vel
+            agent.action.u[1] += y_vel
 
             self._apply_sensitivity(agent, agent.accel)
 
         if not agent.silent:
             agent.action.c = action[-1]
+
+    def action2xy_vel(
+        self, action: NDArray[np.integer], agent: Agent
+    ) -> tuple[float, float]:
+        if len(action) >= 1:
+            x_vel = 0.0
+            y_vel = 0.0
+            if action[0] == 1:  # up
+                y_vel += 1.0
+            elif action[0] == 2:  # down
+                y_vel -= 1.0
+            elif action[0] == 3:  # left
+                x_vel -= 1.0
+            elif action[0] == 4:  # right
+                x_vel += 1.0
+            return x_vel, y_vel
+        else:
+            raise ValueError(
+                f"Action length is less than 1: {len(action)}. Cannot extract x and y velocity."
+            )
+
+
+class DiscreteAngDirectional(ActionMode[NDArray[np.integer]]):
+    """
+    Discrete action for angle direction (0 to num_directions-1) and discrete action for velocity magnitude (0 to u_range) with num_vel_discrete bins,
+    and communication (i.e., 1 dimension).
+    """
+
+    name: str = "discrete_ang_directional"
+
+    def __init__(self, num_directions: int, num_vel_discrete: int) -> None:
+        self.num_directions = num_directions
+        self.num_vel_discrete = num_vel_discrete
+
+    def define_action_space(self, agent: Agent) -> Space[NDArray[np.integer]]:
+        nvecs: list[int] = []
+        if agent.movable:
+            nvecs += [self.num_directions]  # discrete directions
+            nvecs += [self.num_vel_discrete]  # discrete velocity magnitude
+        if not agent.silent:
+            nvecs += [1]  # communication
+
+        return MultiDiscrete(nvecs, dtype=np.int64)
+
+    def update_agent_action(
+        self, agent: Agent, action: NDArray[np.integer], world: World
+    ) -> None:
+        self._zero_agent_actions(agent, world)
+
+        if agent.movable:
+            x_vel, y_vel = self.action2xy_vel(action, agent)
+            agent.action.u[0] += x_vel
+            agent.action.u[1] += y_vel
+
+            self._apply_sensitivity(agent, agent.accel)
+
+        if not agent.silent:
+            agent.action.c = action[-1]
+
+    def action2xy_vel(
+        self, action: NDArray[np.integer], agent: Agent
+    ) -> tuple[float, float]:
+        if len(action) >= 2:
+            direction_idx = int(action[0])
+            vel_idx = int(action[1])
+
+            angle = (direction_idx / self.num_directions) * 2 * np.pi
+            magnitude = (vel_idx / self.num_vel_discrete) * agent.u_range
+
+            x_vel = magnitude * np.cos(angle)
+            y_vel = magnitude * np.sin(angle)
+
+            return x_vel, y_vel
+        else:
+            raise ValueError(
+                f"Action length is less than 2: {len(action)}. Cannot extract x and y velocity."
+            )
