@@ -42,8 +42,8 @@ class ActionMode(Generic[ActType], ABC):
         raise NotImplementedError
 
     def sum_actions(
-        self, action_1: ActType, action_2: ActType, weight: float = 0.5
-    ) -> ActType:
+        self, action_1: NDArray, action_2: NDArray, weight: float = 0.5
+    ) -> NDArray:
         raise NotImplementedError
 
 
@@ -334,25 +334,66 @@ class DiscreteAngDirectional(ActionMode[NDArray[np.integer]]):
         action_2: NDArray[np.integer],
         weight: float = 0.5,
     ) -> NDArray[np.integer]:
-        summed_action = np.copy(action_1)
+        """
+        Sum two discrete ang-directional actions using weighted average for direction and velocity.
 
-        # Sum direction indices using circular mean
-        dir1 = (action_1[0] / self.num_directions) * 2 * np.pi
-        dir2 = (action_2[0] / self.num_directions) * 2 * np.pi
-        x_comp = weight * np.cos(dir1) + (1 - weight) * np.cos(dir2)
-        y_comp = weight * np.sin(dir1) + (1 - weight) * np.sin(dir2)
-        avg_angle = np.arctan2(y_comp, x_comp)
-        if avg_angle < 0:
-            avg_angle += 2 * np.pi
-        summed_direction = (
-            (avg_angle / (2 * np.pi)) * self.num_directions % self.num_directions
-        )
-        summed_action[0] = summed_direction
+        Parameters
+        ----------
+        action_1 : NDArray[np.integer]
+            The first action to be summed. Shape should be (n_envs, 2) where the first element is direction index and the second is velocity index.
+        action_2 : NDArray[np.integer]
+            The second action to be summed. Shape should be (n_envs, 2) where the first element is direction index and the second is velocity index.
+        weight : float, optional
+            The weight for the first action in the summation, by default 0.5.
 
-        # Sum velocity indices linearly
-        summed_velocity = weight * action_1[1] + (1 - weight) * action_2[1]
-        # Ensure the summed value is within valid range
-        summed_velocity = max(0, min(self.num_vel_discrete - 1, summed_velocity))
-        summed_action[1] = summed_velocity
+        Returns
+        -------
+        summed_action: NDArray[np.integer]
+            The resulting summed action. Shape is (n_envs, 2) where the first element is direction index and the second is velocity index.
+
+        """
+        # Extract direction and velocity indices for both actions
+        # Shape: (n_envs,)
+        dir_1 = action_1[:, 0]
+        vel_1 = action_1[:, 1]
+        dir_2 = action_2[:, 0]
+        vel_2 = action_2[:, 1]
+
+        # Convert direction indices to angles
+        angle_1 = (dir_1 / self.num_directions) * 2 * np.pi
+        angle_2 = (dir_2 / self.num_directions) * 2 * np.pi
+
+        # Convert velocity indices to magnitudes (normalized to [0, 1])
+        mag_1 = vel_1 / self.num_vel_discrete
+        mag_2 = vel_2 / self.num_vel_discrete
+
+        # Convert to Cartesian coordinates
+        x_1 = mag_1 * np.cos(angle_1)
+        y_1 = mag_1 * np.sin(angle_1)
+        x_2 = mag_2 * np.cos(angle_2)
+        y_2 = mag_2 * np.sin(angle_2)
+
+        # Weighted sum in Cartesian space
+        x_sum = weight * x_1 + (1 - weight) * x_2
+        y_sum = weight * y_1 + (1 - weight) * y_2
+
+        # Convert back to polar coordinates
+        mag_sum = np.sqrt(x_sum**2 + y_sum**2)
+        angle_sum = np.arctan2(y_sum, x_sum)
+
+        # Normalize angle to [0, 2*pi]
+        angle_sum = np.mod(angle_sum, 2 * np.pi)
+
+        # Convert back to discrete indices
+        dir_sum = (angle_sum / (2 * np.pi)) * self.num_directions
+        # Handle wrap-around for direction
+        dir_sum = np.mod(dir_sum, self.num_directions)
+
+        vel_sum = mag_sum * self.num_vel_discrete
+        # Clip velocity to valid range
+        vel_sum = np.clip(vel_sum, 0, self.num_vel_discrete - 1)
+
+        # Stack to create output shape (n_envs, 2)
+        summed_action = np.stack([dir_sum, vel_sum], axis=1)
 
         return summed_action
