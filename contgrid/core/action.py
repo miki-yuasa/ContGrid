@@ -41,6 +41,11 @@ class ActionMode(Generic[ActType], ABC):
     def action2xy_vel(self, action: ActType, agent: Agent) -> tuple[float, float]:
         raise NotImplementedError
 
+    def sum_actions(
+        self, action_1: ActType, action_2: ActType, weight: float = 0.5
+    ) -> ActType:
+        raise NotImplementedError
+
 
 class ActionModeConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -148,6 +153,20 @@ class DiscreteMinimalVelocity(ActionMode[NDArray[np.integer]]):
             raise ValueError(
                 f"Action length is less than 2: {len(action)}. Cannot extract x and y velocity."
             )
+
+    def sum_actions(
+        self,
+        action_1: NDArray[np.integer],
+        action_2: NDArray[np.integer],
+        weight: float = 0.5,
+    ) -> NDArray[np.integer]:
+        summed_action = np.copy(action_1)
+        for i in range(len(action_1)):
+            summed_value = weight * action_1[i] + (1 - weight) * action_2[i]
+            # Ensure the summed value is within valid range
+            summed_value = max(0, min(self.num_discrete - 1, summed_value))
+            summed_action[i] = summed_value
+        return summed_action
 
 
 class ContinuousFullVelocity(ActionMode[NDArray[np.float64]]):
@@ -308,3 +327,32 @@ class DiscreteAngDirectional(ActionMode[NDArray[np.integer]]):
             raise ValueError(
                 f"Action length is less than 2: {len(action)}. Cannot extract x and y velocity."
             )
+
+    def sum_actions(
+        self,
+        action_1: NDArray[np.integer],
+        action_2: NDArray[np.integer],
+        weight: float = 0.5,
+    ) -> NDArray[np.integer]:
+        summed_action = np.copy(action_1)
+
+        # Sum direction indices using circular mean
+        dir1 = (action_1[0] / self.num_directions) * 2 * np.pi
+        dir2 = (action_2[0] / self.num_directions) * 2 * np.pi
+        x_comp = weight * np.cos(dir1) + (1 - weight) * np.cos(dir2)
+        y_comp = weight * np.sin(dir1) + (1 - weight) * np.sin(dir2)
+        avg_angle = np.arctan2(y_comp, x_comp)
+        if avg_angle < 0:
+            avg_angle += 2 * np.pi
+        summed_direction = (
+            (avg_angle / (2 * np.pi)) * self.num_directions % self.num_directions
+        )
+        summed_action[0] = summed_direction
+
+        # Sum velocity indices linearly
+        summed_velocity = weight * action_1[1] + (1 - weight) * action_2[1]
+        # Ensure the summed value is within valid range
+        summed_velocity = max(0, min(self.num_vel_discrete - 1, summed_velocity))
+        summed_action[1] = summed_velocity
+
+        return summed_action
