@@ -55,7 +55,9 @@ def test_rust_integration():
 
     agent_pos = observation["agent_pos"]
     assert isinstance(agent_pos, np.ndarray), "Agent position should be numpy array"
-    assert agent_pos.shape == (2,), f"Agent position shape should be (2,), got {agent_pos.shape}"
+    assert agent_pos.shape == (2,), (
+        f"Agent position shape should be (2,), got {agent_pos.shape}"
+    )
 
     print("\n✅ All integration tests passed!")
 

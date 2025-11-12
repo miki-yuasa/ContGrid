@@ -20,7 +20,9 @@ import numpy as np
 
 # Try to import accelerated version first
 try:
-    from contgrid.core.grid_rust import WallCollisionCheckerAccelerated as WallCollisionChecker
+    from contgrid.core.grid_rust import (
+        WallCollisionCheckerAccelerated as WallCollisionChecker,
+    )
 except ImportError:
     from contgrid.core.grid import WallCollisionChecker
 
