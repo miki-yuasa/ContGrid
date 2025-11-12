@@ -7,7 +7,13 @@ from pydantic import BaseModel, ConfigDict
 from .agent import Agent
 from .const import COLLISION_FORCE, CONTACT_MARGIN, DRAG, Color
 from .entities import Entity, EntityShape, EntityState, EntityStateT, Landmark
-from .grid import DEFAULT_GRID, Grid, WallCollisionChecker
+from .grid import DEFAULT_GRID, Grid
+
+# Try to import the accelerated version, fall back to pure Python
+try:
+    from .grid_rust import WallCollisionCheckerAccelerated as WallCollisionChecker
+except ImportError:
+    from .grid import WallCollisionChecker  # type: ignore
 
 
 class WorldConfig(BaseModel):

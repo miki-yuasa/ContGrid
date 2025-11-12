@@ -18,7 +18,12 @@ from typing import Callable
 import gymnasium as gym
 import numpy as np
 
-from contgrid.core.grid import WallCollisionChecker
+# Try to import accelerated version first
+try:
+    from contgrid.core.grid_rust import WallCollisionCheckerAccelerated as WallCollisionChecker
+except ImportError:
+    from contgrid.core.grid import WallCollisionChecker
+
 from contgrid.envs.rooms import (
     DEFAULT_ROOMS_SCENARIO_CONFIG,
     DEFAULT_WORLD_CONFIG,
