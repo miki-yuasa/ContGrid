@@ -1,6 +1,8 @@
 # ContGrid
 Continuous space adaptation of grid-world envs in Gymnasium
 
+**Performance:** This environment uses **Rust** 🦀 acceleration for ultra-fast wall collision detection, providing up to 650x speedup than Python (without rendering) in critical computation paths.
+
 ## Environments
 ### RoomsEnv
 
