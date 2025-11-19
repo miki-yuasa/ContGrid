@@ -120,6 +120,15 @@ impl WallCollisionCheckerRust {
         true
     }
 
+    /// Support for deepcopy in Python
+    fn __deepcopy__(&self, _memo: &Bound<'_, pyo3::types::PyDict>) -> Self {
+        WallCollisionCheckerRust {
+            wall_bounds: self.wall_bounds.clone(),
+            l: self.l,
+            verbose: self.verbose,
+        }
+    }
+
     /// Clip the new position to ensure no collision with walls
     fn clip_new_position(
         &self,
