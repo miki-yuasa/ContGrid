@@ -379,7 +379,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             "Call enable_render() or set render_mode to human or rgb_array"
         )
         # update bounds to center around agent
-        all_poses = [entity.state.pos for entity in self.world.all_entities]
+        all_poses = [entity.draw_pos for entity in self.world.all_entities]
 
         # Find the limits of the environment
         all_poses_np = np.array(all_poses)
@@ -437,8 +437,8 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
 
     def _draw_shape(self, entity: Entity):
         # Convert color tuple to matplotlib-compatible format (0-1 range)
-        x: float = entity.state.pos[0]
-        y: float = entity.state.pos[1]
+        x: float = entity.draw_pos[0]
+        y: float = entity.draw_pos[1]
         size: float = entity.size
         shape: EntityShape = entity.shape
         color_normalized = tuple(c / 255.0 for c in entity.color)

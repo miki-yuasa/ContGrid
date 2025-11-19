@@ -101,6 +101,10 @@ class World:  # multi-agent world
                     ang_vel=0.0,
                 ),
                 initial_mass=1000,
+                draw_pos_offset=np.array(
+                    [-self.grid.cell_size / 2, -self.grid.cell_size / 2],
+                    dtype=np.float64,
+                ),
             )
             walls.append(wall)
 

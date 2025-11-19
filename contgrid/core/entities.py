@@ -116,6 +116,7 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         initial_mass: float = 1.0,
         hatch: str = "",
         reset_config: ResetConfig = ResetConfig(),
+        draw_pos_offset: NDArray[np.float64] = np.array([0.0, 0.0], dtype=np.float64),
     ):
         # name
         self.name = name
@@ -146,6 +147,9 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         # reset configuration with some randomization options
         self.reset_config = reset_config
 
+        # draw position offset
+        self.draw_pos_offset = draw_pos_offset
+
     @property
     def mass(self):
         return self.initial_mass
@@ -160,6 +164,10 @@ class Entity(Generic[EntityStateT]):  # properties and state of physical world e
         self.state.ang_vel = 0.0
         # Reset rotation
         self.state.rot = 0.0
+
+    @property
+    def draw_pos(self) -> NDArray[np.float64]:
+        return self.state.pos + self.draw_pos_offset
 
 
 class Landmark(Entity[EntityState]):  # properties of landmark entities
@@ -179,6 +187,7 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
         initial_mass: float = 1,
         hatch: str = "",
         reset_config: ResetConfig = ResetConfig(),
+        draw_pos_offset: NDArray[np.float64] = np.array([0.0, 0.0], dtype=np.float64),
     ):
         super().__init__(
             name,
@@ -195,4 +204,5 @@ class Landmark(Entity[EntityState]):  # properties of landmark entities
             initial_mass,
             hatch,
             reset_config,
+            draw_pos_offset,
         )

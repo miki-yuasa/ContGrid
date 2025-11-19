@@ -92,6 +92,7 @@ class Agent(Entity[AgentState], Generic[CallbackT]):  # properties of agent enti
         u_range: float = 10.0,
         action: Action = Action(),
         action_callback: Callable[["Agent", CallbackT], Action] | None = None,
+        draw_pos_offset: NDArray[np.float64] = np.array([0.0, 0.0], dtype=np.float64),
     ):
         super().__init__(
             name,
@@ -107,6 +108,7 @@ class Agent(Entity[AgentState], Generic[CallbackT]):  # properties of agent enti
             state,
             initial_mass,
             reset_config=reset_config,
+            draw_pos_offset=draw_pos_offset,
         )
         # agents are movable by default
         # cannot send communication signals
