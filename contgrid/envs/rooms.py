@@ -506,7 +506,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         } | doorway_distances
 
         # Success info
-        info_dict["is_success"] = d_gl < self.goal_thr_dist
+        info_dict["is_success"] = bool(d_gl < self.goal_thr_dist)
         info_dict["thresholds"] = {
             "goal": self.goal_thr_dist,
             "lava": self.lava_thr_dist,
