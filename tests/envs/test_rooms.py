@@ -10,10 +10,12 @@ from contgrid.envs.rooms import (
     DEFAULT_ROOMS_SCENARIO_CONFIG,
     DEFAULT_WORLD_CONFIG,
     ObjConfig,
+    PathGaussianConfig,
     RewardConfig,
     RoomsEnv,
     RoomsScenario,
     RoomsScenarioConfig,
+    RoomTopology,
     SpawnConfig,
 )
 
@@ -712,6 +714,153 @@ class TestRoomsScenario:
         pprint(spawn_config.model_dump())
 
         assert os.path.exists(plot_save_path)
+
+    def test_path_gaussian_spawn_with_random_agent(self):
+        """Test path-based Gaussian obstacle spawning with random agent position"""
+        output_dir = os.path.join("tests", "out", "path_gaussian_spawn")
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Create config with path-based Gaussian spawning
+        spawn_config = SpawnConfig(
+            agent=None,  # Random agent spawning
+            goal=ObjConfig(pos=(9, 8), reward=1.0, absorbing=False),
+            lavas=[
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_right"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_right"),
+            ],
+            holes=[
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_right"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_right"),
+            ],
+            spawn_method=PathGaussianConfig(
+                gaussian_std=0.6,
+                min_spacing=0.9,
+                edge_buffer=0.4,
+                include_agent_paths=True,
+            ),
+            goal_size=0.4,
+            lava_size=0.4,
+            hole_size=0.4,
+        )
+        config = RoomsScenarioConfig(spawn_config=spawn_config)
+        env = RoomsEnv(scenario_config=config)
+
+        # Save multiple resets to show different configurations
+        num_samples = 5
+        all_frames = []
+
+        for sample_idx in range(num_samples):
+            observation, info = env.reset(seed=42 + sample_idx)
+            rendered = env.render()
+
+            # Save individual frame
+            frame_path = os.path.join(
+                output_dir, f"path_gaussian_spawn_sample_{sample_idx}.png"
+            )
+            imageio.imwrite(frame_path, rendered)
+            print(f"Sample {sample_idx}: Agent at {observation['agent_pos']}")
+            print(f"  Goal at {observation['agent_pos'] + observation['goal_pos']}")
+            print(
+                f"  Lavas at: {observation['agent_pos'] + observation['lava_pos'][:3]}..."
+            )
+            print(f"  Saved to: {frame_path}")
+
+            all_frames.append(rendered.astype(np.uint8))
+
+            # Verify obstacles are placed
+            assert len(env.scenario.lavas) == 4
+            assert len(env.scenario.holes) == 4
+            assert observation["lava_pos"].shape[0] <= 6
+            assert observation["hole_pos"].shape[0] <= 4
+
+            # Verify minimum spacing between obstacles
+            min_spacing = 0.9
+
+            # Get absolute positions
+            lava_positions = observation["agent_pos"] + observation["lava_pos"]
+            hole_positions = observation["agent_pos"] + observation["hole_pos"]
+
+            # Check spacing between lavas
+            if len(lava_positions) > 1:
+                for i in range(len(lava_positions)):
+                    for j in range(i + 1, len(lava_positions)):
+                        dist = np.linalg.norm(lava_positions[i] - lava_positions[j])
+                        assert dist >= min_spacing, (
+                            f"Lavas {i} and {j} too close: {dist:.3f} < {min_spacing}"
+                        )
+
+            # Check spacing between holes
+            if len(hole_positions) > 1:
+                for i in range(len(hole_positions)):
+                    for j in range(i + 1, len(hole_positions)):
+                        dist = np.linalg.norm(hole_positions[i] - hole_positions[j])
+                        assert dist >= min_spacing, (
+                            f"Holes {i} and {j} too close: {dist:.3f} < {min_spacing}"
+                        )
+
+            # Check spacing between lavas and holes
+            for i, lava_pos in enumerate(lava_positions):
+                for j, hole_pos in enumerate(hole_positions):
+                    dist = np.linalg.norm(lava_pos - hole_pos)
+                    assert dist >= min_spacing, (
+                        f"Lava {i} and hole {j} too close: {dist:.3f} < {min_spacing}"
+                    )
+
+            # Verify obstacles spawned in their designated rooms
+
+            topology = RoomTopology(config.spawn_config.doorways)
+
+            # Check each lava is in its designated room
+            for i, (lava_pos, lava_config) in enumerate(
+                zip(lava_positions, config.spawn_config.lavas)
+            ):
+                if lava_config.room is not None:
+                    actual_room = topology.get_room(lava_pos)
+                    assert actual_room == lava_config.room, (
+                        f"Lava {i} spawned in room '{actual_room}' but expected '{lava_config.room}' at position {lava_pos}"
+                    )
+
+            # Check each hole is in its designated room
+            for i, (hole_pos, hole_config) in enumerate(
+                zip(hole_positions, config.spawn_config.holes)
+            ):
+                if hole_config.room is not None:
+                    actual_room = topology.get_room(hole_pos)
+                    assert actual_room == hole_config.room, (
+                        f"Hole {i} spawned in room '{actual_room}' but expected '{hole_config.room}' at position {hole_pos}"
+                    )
+
+        # Test that agent can move and collect more frames for an episode
+        observation, info = env.reset(seed=123)
+        episode_frames = [env.render().astype(np.uint8)]
+
+        for step in range(50):
+            # Move towards goal with some noise
+            goal_direction = observation["goal_pos"]
+            if np.linalg.norm(goal_direction) > 0:
+                action = goal_direction / np.linalg.norm(goal_direction) * 0.5
+                action += np.random.randn(2) * 0.1  # Add noise
+            else:
+                action = np.random.randn(2) * 0.1
+
+            observation, reward, terminated, truncated, info = env.step(action)
+            episode_frames.append(env.render().astype(np.uint8))
+
+            if terminated or truncated:
+                break
+
+        env.close()
+
+        # Verify all expected files exist
+        for sample_idx in range(num_samples):
+            frame_path = os.path.join(
+                output_dir, f"path_gaussian_spawn_sample_{sample_idx}.png"
+            )
+            assert os.path.exists(frame_path)
 
 
 if __name__ == "__main__":

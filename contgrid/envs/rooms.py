@@ -42,7 +42,7 @@ class PathGaussianConfig(BaseModel):
 
     mode: Literal[SpawnMode.PATH_GAUSSIAN] = SpawnMode.PATH_GAUSSIAN
     gaussian_std: float = 0.5
-    min_spacing: float = 0.5
+    min_spacing: float = 0.9
     edge_buffer: float = 0.3
     include_agent_paths: bool = True
 
@@ -75,6 +75,9 @@ class ObjConfig(BaseModel):
     )
     reward: float = 0.0
     absorbing: bool = False
+    room: Literal["top_left", "top_right", "bottom_left", "bottom_right"] | None = (
+        None  # Which room to spawn in (None = any room)
+    )
 
 
 class SpawnConfig(BaseModel):
@@ -197,6 +200,47 @@ class RoomTopology:
             ],  # bottom doorway connects to bottom-left and bottom-right
         }
 
+        # Room boundaries defined by corners (min_x, max_x, min_y, max_y)
+        # Based on the grid layout with vertical wall at x=6 and horizontal walls
+        self.room_boundaries = {
+            "top_left": {"min_x": 1.0, "max_x": 5.0, "min_y": 7.0, "max_y": 11.0},
+            "top_right": {"min_x": 7.0, "max_x": 11.5, "min_y": 6.0, "max_y": 11.0},
+            "bottom_left": {"min_x": 1.0, "max_x": 5.0, "min_y": 1.0, "max_y": 5.0},
+            "bottom_right": {"min_x": 7.0, "max_x": 11.5, "min_y": 1.0, "max_y": 4.0},
+        }
+
+    def get_room(self, position: Position | NDArray[np.float64]) -> str:
+        """Determine which room a position belongs to based on boundaries."""
+        pos = np.array(position, dtype=np.float64)
+        x, y = float(pos[0]), float(pos[1])
+
+        # Check each room's boundaries
+        for room_name, bounds in self.room_boundaries.items():
+            if (
+                bounds["min_x"] <= x <= bounds["max_x"]
+                and bounds["min_y"] <= y <= bounds["max_y"]
+            ):
+                return room_name
+
+        # Fallback: if position is outside all boundaries (e.g., doorway), find closest room center
+        room_centers = {
+            "top_left": np.array([3.5, 9.0]),
+            "top_right": np.array([9.0, 9.0]),
+            "bottom_left": np.array([3.5, 4.0]),
+            "bottom_right": np.array([9.0, 3.5]),
+        }
+
+        min_dist = float("inf")
+        closest_room = "top_left"
+
+        for room_name, center in room_centers.items():
+            dist = np.linalg.norm(pos - center)
+            if dist < min_dist:
+                min_dist = dist
+                closest_room = room_name
+
+        return closest_room
+
     def get_neighbor_doorways(self, doorway_name: str) -> list[str]:
         """Get names of doorways that are neighbors to the given doorway."""
         return self.neighbor_map.get(doorway_name, [])
@@ -302,6 +346,7 @@ class SpawnStrategy(ABC):
         scenario: "RoomsScenario",
         np_random: np.random.Generator,
         agent_pos: NDArray[np.float64] | None = None,
+        obstacle_configs: list[ObjConfig] | None = None,
     ) -> list[Position]:
         """Generate obstacle positions."""
         pass
@@ -318,6 +363,7 @@ class FixedSpawnStrategy(SpawnStrategy):
         scenario: "RoomsScenario",
         np_random: np.random.Generator,
         agent_pos: NDArray[np.float64] | None = None,
+        obstacle_configs: list[ObjConfig] | None = None,
     ) -> list[Position]:
         """Spawn obstacles at configured positions or random free cells."""
         positions = []
@@ -352,9 +398,20 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         scenario: "RoomsScenario",
         np_random: np.random.Generator,
         agent_pos: NDArray[np.float64] | None = None,
+        obstacle_configs: list[ObjConfig] | None = None,
     ) -> list[Position]:
         """Spawn obstacles along relevant paths with Gaussian perturbation."""
         positions = []
+
+        # Get room constraints for each obstacle
+        room_constraints = [None] * num_obstacles
+        if obstacle_configs:
+            room_constraints = [
+                config.room for config in obstacle_configs[:num_obstacles]
+            ]
+
+        # Get all existing obstacles to check spacing
+        existing_obstacles = self._get_existing_obstacles(scenario)
 
         # Initialize topology if not done
         if self.topology is None:
@@ -380,19 +437,60 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                 num_obstacles, obstacle_type, world, scenario, np_random, agent_pos
             )
 
-        # Weight segments by length
+        # Weight segments by length and filter out zero-length segments
         lengths = np.array([seg.length() for seg in segments])
-        if lengths.sum() == 0:
-            return []
 
-        probabilities = lengths / lengths.sum()
+        # Filter out segments with zero or invalid lengths
+        valid_mask = (lengths > 1e-6) & np.isfinite(lengths)
+        if not valid_mask.any():
+            # No valid segments, fallback to fixed strategy
+            return FixedSpawnStrategy().spawn_obstacles(
+                num_obstacles, obstacle_type, world, scenario, np_random, agent_pos
+            )
+
+        # Use only valid segments
+        valid_segments = [seg for seg, valid in zip(segments, valid_mask) if valid]
+        valid_lengths = lengths[valid_mask]
+
+        probabilities = valid_lengths / valid_lengths.sum()
 
         max_attempts = 100
-        for _ in range(num_obstacles):
+        for obstacle_idx in range(num_obstacles):
+            required_room = room_constraints[obstacle_idx]
+
+            # Filter segments to only those in the required room if specified
+            room_valid_segments = valid_segments
+            room_probabilities = probabilities
+
+            if required_room is not None:
+                # Get room boundaries
+                room_bounds = self.topology.room_boundaries[required_room]
+
+                # Filter segments: keep only those with both endpoints in the required room
+                room_segment_indices = []
+                for idx, seg in enumerate(valid_segments):
+                    start_room = self.topology.get_room(seg.start)
+                    end_room = self.topology.get_room(seg.end)
+                    if start_room == required_room or end_room == required_room:
+                        room_segment_indices.append(idx)
+
+                if room_segment_indices:
+                    room_valid_segments = [
+                        valid_segments[i] for i in room_segment_indices
+                    ]
+                    room_lengths = valid_lengths[room_segment_indices]
+                    room_probabilities = room_lengths / room_lengths.sum()
+                else:
+                    # Fallback: use all segments but clip to room bounds
+                    room_valid_segments = valid_segments
+                    room_probabilities = probabilities
+
             for attempt in range(max_attempts):
                 # Sample a segment (weighted by length)
-                segment_idx = np_random.choice(len(segments), p=probabilities)
-                segment = segments[segment_idx]
+                segment_idx = np_random.choice(
+                    len(room_valid_segments), p=room_probabilities
+                )
+                segment = room_valid_segments[segment_idx]
 
                 # Sample point along segment
                 t = np_random.uniform(0, 1)
@@ -415,14 +513,62 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                     base_pos + parallel_noise * direction + perp_noise * perpendicular
                 )
 
+                # Clip to room boundaries if room constraint is specified
+                if required_room is not None:
+                    room_bounds = self.topology.room_boundaries[required_room]
+                    perturbed_pos[0] = np.clip(
+                        perturbed_pos[0],
+                        room_bounds["min_x"] + self.config.edge_buffer,
+                        room_bounds["max_x"] - self.config.edge_buffer,
+                    )
+                    perturbed_pos[1] = np.clip(
+                        perturbed_pos[1],
+                        room_bounds["min_y"] + self.config.edge_buffer,
+                        room_bounds["max_y"] - self.config.edge_buffer,
+                    )
+
                 # Validate position
                 if self._is_valid_position(
-                    perturbed_pos, world, positions, scenario, obstacle_type
+                    perturbed_pos,
+                    world,
+                    positions + existing_obstacles,
+                    scenario,
+                    obstacle_type,
                 ):
                     positions.append(tuple(perturbed_pos))
                     break
 
         return positions
+
+    def _get_existing_obstacles(self, scenario: "RoomsScenario") -> list[Position]:
+        """Get all existing obstacle positions (lavas and holes already spawned)."""
+        existing = []
+
+        # Add existing lava positions
+        for lava in scenario.lavas:
+            if hasattr(lava.state, "pos") and lava.state.pos is not None:
+                # Check if pos is a proper 2D position array
+                if isinstance(lava.state.pos, np.ndarray) and lava.state.pos.shape == (
+                    2,
+                ):
+                    pos_tuple = tuple(lava.state.pos)
+                    # Only add if not at origin (indicates uninitialized)
+                    if pos_tuple != (0.0, 0.0):
+                        existing.append(pos_tuple)
+
+        # Add existing hole positions
+        for hole in scenario.holes:
+            if hasattr(hole.state, "pos") and hole.state.pos is not None:
+                # Check if pos is a proper 2D position array
+                if isinstance(hole.state.pos, np.ndarray) and hole.state.pos.shape == (
+                    2,
+                ):
+                    pos_tuple = tuple(hole.state.pos)
+                    # Only add if not at origin (indicates uninitialized)
+                    if pos_tuple != (0.0, 0.0):
+                        existing.append(pos_tuple)
+
+        return existing
 
     def _get_doorway_segments_only(
         self, scenario: "RoomsScenario"
@@ -523,16 +669,43 @@ class UniformRandomSpawnStrategy(SpawnStrategy):
         scenario: "RoomsScenario",
         np_random: np.random.Generator,
         agent_pos: NDArray[np.float64] | None = None,
+        obstacle_configs: list[ObjConfig] | None = None,
     ) -> list[Position]:
         """Spawn obstacles uniformly in free cells."""
         positions = []
 
-        for _ in range(num_obstacles):
-            if scenario.free_cells:
-                chosen_idx = np_random.choice(len(scenario.free_cells))
-                new_pos = scenario.free_cells[chosen_idx]
+        # Initialize topology if not done
+        if not hasattr(self, "topology") or self.topology is None:
+            assert scenario.config
+            self.topology = RoomTopology(scenario.config.spawn_config.doorways)
+
+        # Get room constraints for each obstacle
+        room_constraints = [None] * num_obstacles
+        if obstacle_configs:
+            room_constraints = [
+                config.room for config in obstacle_configs[:num_obstacles]
+            ]
+
+        for obstacle_idx in range(num_obstacles):
+            required_room = room_constraints[obstacle_idx]
+
+            # Filter free cells by room constraint if specified
+            if required_room is not None:
+                available_cells = [
+                    cell
+                    for cell in scenario.free_cells
+                    if self.topology.get_room(cell) == required_room
+                ]
+            else:
+                available_cells = scenario.free_cells
+
+            if available_cells:
+                chosen_idx = np_random.choice(len(available_cells))
+                new_pos = available_cells[chosen_idx]
                 positions.append(new_pos)
-                scenario.free_cells.pop(chosen_idx)
+                # Remove from main free_cells list
+                if new_pos in scenario.free_cells:
+                    scenario.free_cells.remove(new_pos)
 
         return positions
 
@@ -702,6 +875,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         agent_pos = world.agents[0].state.pos if world.agents else None
 
         # Use strategy pattern for obstacles
+        assert self.config
         lava_positions = self.spawn_strategy.spawn_obstacles(
             num_obstacles=len(self.lavas),
             obstacle_type="lava",
@@ -709,7 +883,13 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             scenario=self,
             np_random=np_random,
             agent_pos=agent_pos,
+            obstacle_configs=self.config.spawn_config.lavas,
         )
+
+        # Update lava positions BEFORE spawning holes to enable overlap detection
+        for i, pos in enumerate(lava_positions):
+            if i < len(self.lavas):
+                self.lavas[i].state.pos = np.array(pos, dtype=np.float64)
 
         hole_positions = self.spawn_strategy.spawn_obstacles(
             num_obstacles=len(self.holes),
@@ -718,13 +898,10 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             scenario=self,
             np_random=np_random,
             agent_pos=agent_pos,
+            obstacle_configs=self.config.spawn_config.holes,
         )
 
-        # Update landmark positions
-        for i, pos in enumerate(lava_positions):
-            if i < len(self.lavas):
-                self.lavas[i].state.pos = np.array(pos, dtype=np.float64)
-
+        # Update hole positions
         for i, pos in enumerate(hole_positions):
             if i < len(self.holes):
                 self.holes[i].state.pos = np.array(pos, dtype=np.float64)
