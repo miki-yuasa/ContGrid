@@ -1,5 +1,8 @@
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
 from pprint import pprint
-from typing import Any, Final
+from typing import Any, Literal
 
 import numpy as np
 from gymnasium import spaces
@@ -24,6 +27,41 @@ from contgrid.core import (
     rc2cell_pos,
 )
 from contgrid.core.typing import CellPosition, Position
+
+
+class SpawnMode(str, Enum):
+    """Enumeration of available obstacle spawning methods."""
+
+    FIXED = "fixed"
+    PATH_GAUSSIAN = "path_gaussian"
+    UNIFORM_RANDOM = "uniform_random"
+
+
+class PathGaussianConfig(BaseModel):
+    """Configuration for path-based Gaussian spawning."""
+
+    mode: Literal[SpawnMode.PATH_GAUSSIAN] = SpawnMode.PATH_GAUSSIAN
+    gaussian_std: float = 0.5
+    min_spacing: float = 0.5
+    edge_buffer: float = 0.3
+    include_agent_paths: bool = True
+
+
+class UniformRandomConfig(BaseModel):
+    """Configuration for uniform random spawning."""
+
+    mode: Literal[SpawnMode.UNIFORM_RANDOM] = SpawnMode.UNIFORM_RANDOM
+    min_spacing: float = 0.5
+
+
+class FixedSpawnConfig(BaseModel):
+    """Configuration for fixed position spawning."""
+
+    mode: Literal[SpawnMode.FIXED] = SpawnMode.FIXED
+
+
+# Union type for all spawn method configs
+SpawnMethodConfig = PathGaussianConfig | UniformRandomConfig | FixedSpawnConfig
 
 
 class RewardConfig(BaseModel):
@@ -95,6 +133,7 @@ class SpawnConfig(BaseModel):
     lava_thr_dist: float | None = None
     hole_thr_dist: float | None = None
     agent_u_range: float = 10.0
+    spawn_method: SpawnMethodConfig = FixedSpawnConfig()
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -124,6 +163,378 @@ DEFAULT_WORLD_CONFIG = WorldConfig(
         ]
     )
 )
+
+
+@dataclass
+class LineSegment:
+    """Represents a straight line segment in continuous space."""
+
+    start: NDArray[np.float64]
+    end: NDArray[np.float64]
+
+    def sample_point(self, t: float) -> NDArray[np.float64]:
+        """Sample a point at parameter t ∈ [0, 1] along the line."""
+        return self.start + t * (self.end - self.start)
+
+    def length(self) -> float:
+        """Get the length of the line segment."""
+        return float(np.linalg.norm(self.end - self.start))
+
+
+class RoomTopology:
+    """Defines the room structure and doorway connections."""
+
+    def __init__(self, doorways: dict[str, Position]):
+        self.doorways = doorways
+        # Define which doorways are neighbors (connected by a room)
+        self.neighbor_map: dict[str, list[str]] = {
+            "ld": ["td", "bd"],  # left doorway connects to top-left and bottom-left
+            "td": ["ld", "rd"],  # top doorway connects to top-left and top-right
+            "rd": ["td", "bd"],  # right doorway connects to top-right and bottom-right
+            "bd": [
+                "ld",
+                "rd",
+            ],  # bottom doorway connects to bottom-left and bottom-right
+        }
+
+    def get_neighbor_doorways(self, doorway_name: str) -> list[str]:
+        """Get names of doorways that are neighbors to the given doorway."""
+        return self.neighbor_map.get(doorway_name, [])
+
+    def get_doorways_in_room(self, position: Position, grid: Grid) -> list[str]:
+        """
+        Determine which doorways belong to the room containing the given position.
+        Returns up to 2 doorway names.
+        """
+        # Simple approach: find the two closest doorways
+        # This assumes the agent is in a room bounded by those doorways
+        distances = {
+            name: np.linalg.norm(np.array(position) - np.array(pos))
+            for name, pos in self.doorways.items()
+        }
+        # Sort by distance and take the two closest
+        sorted_doorways = sorted(distances.items(), key=lambda x: x[1])
+
+        # Return the two closest doorways (they should be neighbors)
+        closest_two = [name for name, _ in sorted_doorways[:2]]
+
+        # Verify they are actually neighbors
+        if len(closest_two) == 2:
+            if closest_two[1] in self.neighbor_map.get(closest_two[0], []):
+                return closest_two
+
+        # If not neighbors, return the closest one and its neighbors
+        closest = closest_two[0]
+        return [closest] + self.neighbor_map.get(closest, [])[:1]
+
+
+def get_relevant_path_segments(
+    agent_pos: NDArray[np.float64],
+    goal_pos: NDArray[np.float64],
+    doorways: dict[str, NDArray[np.float64]],
+    topology: RoomTopology,
+    grid: Grid,
+) -> list[LineSegment]:
+    """
+    Get relevant path segments based on agent position.
+    Only includes paths between neighboring doorways and agent to its room's doorways.
+
+    Parameters
+    ----------
+    agent_pos : Agent's current position
+    goal_pos : Goal position
+    doorways : Dictionary of doorway positions
+    topology : Room topology information
+    grid : Grid for spatial queries
+
+    Returns
+    -------
+    List of LineSegment objects representing relevant paths
+    """
+    segments = []
+
+    # 1. Find which room the agent is in
+    agent_room_doorways = topology.get_doorways_in_room(tuple(agent_pos), grid)
+
+    # 2. Add segments from agent to its room's doorways
+    for doorway_name in agent_room_doorways:
+        if doorway_name in doorways:
+            segments.append(
+                LineSegment(agent_pos.copy(), doorways[doorway_name].copy())
+            )
+
+    # 3. Add segments between neighboring doorways only
+    added_pairs = set()
+    for doorway_name, doorway_pos in doorways.items():
+        neighbors = topology.get_neighbor_doorways(doorway_name)
+        for neighbor_name in neighbors:
+            if neighbor_name in doorways:
+                # Avoid duplicates by sorting names
+                pair = tuple(sorted([doorway_name, neighbor_name]))
+                if pair not in added_pairs:
+                    segments.append(
+                        LineSegment(doorway_pos.copy(), doorways[neighbor_name].copy())
+                    )
+                    added_pairs.add(pair)
+
+    # 4. Find which doorways are closest to the goal and add those paths
+    goal_distances = {
+        name: np.linalg.norm(goal_pos - pos) for name, pos in doorways.items()
+    }
+    closest_to_goal = min(goal_distances.items(), key=lambda x: x[1])[0]
+
+    # Add path from closest doorway to goal
+    if closest_to_goal in doorways:
+        segments.append(LineSegment(doorways[closest_to_goal].copy(), goal_pos.copy()))
+
+    return segments
+
+
+class SpawnStrategy(ABC):
+    """Abstract base class for object spawning strategies."""
+
+    @abstractmethod
+    def spawn_obstacles(
+        self,
+        num_obstacles: int,
+        obstacle_type: str,
+        world: World,
+        scenario: "RoomsScenario",
+        np_random: np.random.Generator,
+        agent_pos: NDArray[np.float64] | None = None,
+    ) -> list[Position]:
+        """Generate obstacle positions."""
+        pass
+
+
+class FixedSpawnStrategy(SpawnStrategy):
+    """Original fixed-position spawning strategy."""
+
+    def spawn_obstacles(
+        self,
+        num_obstacles: int,
+        obstacle_type: str,
+        world: World,
+        scenario: "RoomsScenario",
+        np_random: np.random.Generator,
+        agent_pos: NDArray[np.float64] | None = None,
+    ) -> list[Position]:
+        """Spawn obstacles at configured positions or random free cells."""
+        positions = []
+
+        obstacle_landmarks = (
+            scenario.lavas if obstacle_type == "lava" else scenario.holes
+        )
+
+        for landmark in obstacle_landmarks[:num_obstacles]:
+            new_pos = scenario._choose_new_pos(
+                landmark.reset_config.spawn_pos, scenario.free_cells, np_random
+            )
+            positions.append(new_pos)
+            if new_pos in scenario.free_cells:
+                scenario.free_cells.remove(new_pos)
+
+        return positions
+
+
+class PathGaussianSpawnStrategy(SpawnStrategy):
+    """Spawn obstacles near shortest paths with Gaussian noise."""
+
+    def __init__(self, config: PathGaussianConfig):
+        self.config = config
+        self.topology: RoomTopology | None = None
+
+    def spawn_obstacles(
+        self,
+        num_obstacles: int,
+        obstacle_type: str,
+        world: World,
+        scenario: "RoomsScenario",
+        np_random: np.random.Generator,
+        agent_pos: NDArray[np.float64] | None = None,
+    ) -> list[Position]:
+        """Spawn obstacles along relevant paths with Gaussian perturbation."""
+        positions = []
+
+        # Initialize topology if not done
+        if self.topology is None:
+            assert scenario.config
+            self.topology = RoomTopology(scenario.config.spawn_config.doorways)
+
+        # Get relevant path segments (requires agent position)
+        if agent_pos is None and self.config.include_agent_paths:
+            # Fallback: use all neighboring doorway pairs
+            segments = self._get_doorway_segments_only(scenario)
+        else:
+            segments = get_relevant_path_segments(
+                agent_pos if agent_pos is not None else scenario.goal_pos,
+                scenario.goal_pos,
+                scenario.doorways,
+                self.topology,
+                world.grid,
+            )
+
+        if not segments:
+            # Fallback to fixed strategy
+            return FixedSpawnStrategy().spawn_obstacles(
+                num_obstacles, obstacle_type, world, scenario, np_random, agent_pos
+            )
+
+        # Weight segments by length
+        lengths = np.array([seg.length() for seg in segments])
+        if lengths.sum() == 0:
+            return []
+
+        probabilities = lengths / lengths.sum()
+
+        max_attempts = 100
+        for _ in range(num_obstacles):
+            for attempt in range(max_attempts):
+                # Sample a segment (weighted by length)
+                segment_idx = np_random.choice(len(segments), p=probabilities)
+                segment = segments[segment_idx]
+
+                # Sample point along segment
+                t = np_random.uniform(0, 1)
+                base_pos = segment.sample_point(t)
+
+                # Add Gaussian noise perpendicular and parallel to path
+                direction = segment.end - segment.start
+                norm = np.linalg.norm(direction)
+                if norm > 1e-6:
+                    direction = direction / norm
+                    perpendicular = np.array([-direction[1], direction[0]])
+                else:
+                    direction = np.array([1.0, 0.0])
+                    perpendicular = np.array([0.0, 1.0])
+
+                parallel_noise = np_random.normal(0, self.config.gaussian_std)
+                perp_noise = np_random.normal(0, self.config.gaussian_std)
+
+                perturbed_pos = (
+                    base_pos + parallel_noise * direction + perp_noise * perpendicular
+                )
+
+                # Validate position
+                if self._is_valid_position(
+                    perturbed_pos, world, positions, scenario, obstacle_type
+                ):
+                    positions.append(tuple(perturbed_pos))
+                    break
+
+        return positions
+
+    def _get_doorway_segments_only(
+        self, scenario: "RoomsScenario"
+    ) -> list[LineSegment]:
+        """Get segments between neighboring doorways and to goal."""
+        segments = []
+
+        # Neighboring doorway pairs
+        neighbor_pairs = [("ld", "td"), ("ld", "bd"), ("td", "rd"), ("rd", "bd")]
+
+        for d1, d2 in neighbor_pairs:
+            if d1 in scenario.doorways and d2 in scenario.doorways:
+                segments.append(
+                    LineSegment(
+                        scenario.doorways[d1].copy(), scenario.doorways[d2].copy()
+                    )
+                )
+
+        # Add paths from doorways closest to goal
+        goal_distances = {
+            name: np.linalg.norm(scenario.goal_pos - pos)
+            for name, pos in scenario.doorways.items()
+        }
+        closest_doorway = min(goal_distances.items(), key=lambda x: x[1])[0]
+        if closest_doorway in scenario.doorways:
+            segments.append(
+                LineSegment(
+                    scenario.doorways[closest_doorway].copy(), scenario.goal_pos.copy()
+                )
+            )
+
+        return segments
+
+    def _is_valid_position(
+        self,
+        pos: NDArray[np.float64],
+        world: World,
+        existing_positions: list[Position],
+        scenario: "RoomsScenario",
+        obstacle_type: str,
+    ) -> bool:
+        """Check if position is valid for obstacle spawning."""
+        assert scenario.config
+        limits = world.grid.wall_limits
+
+        # Get obstacle size based on type
+        obstacle_radius = (
+            scenario.config.spawn_config.lava_size
+            if obstacle_type == "lava"
+            else scenario.config.spawn_config.hole_size
+        )
+
+        # Check bounds with buffer
+        if not (
+            limits.min_x + self.config.edge_buffer
+            <= pos[0]
+            <= limits.max_x - self.config.edge_buffer
+            and limits.min_y + self.config.edge_buffer
+            <= pos[1]
+            <= limits.max_y - self.config.edge_buffer
+        ):
+            return False
+
+        # Check wall collision using actual obstacle radius
+        is_collided, _ = world.wall_collision_checker.is_collision(
+            R=obstacle_radius,
+            C=0.0,
+            robot_pos=(float(pos[0]), float(pos[1])),
+            collision_force=1.0,
+            contact_margin=0.1,
+        )
+        if is_collided:
+            return False
+
+        # Check spacing from existing obstacles
+        for existing_pos in existing_positions:
+            if np.linalg.norm(pos - np.array(existing_pos)) < self.config.min_spacing:
+                return False
+
+        # Check not too close to goal
+        if np.linalg.norm(pos - scenario.goal_pos) < scenario.goal_thr_dist + 0.5:
+            return False
+
+        return True
+
+
+class UniformRandomSpawnStrategy(SpawnStrategy):
+    """Spawn obstacles uniformly at random in free space."""
+
+    def __init__(self, config: UniformRandomConfig):
+        self.config = config
+
+    def spawn_obstacles(
+        self,
+        num_obstacles: int,
+        obstacle_type: str,
+        world: World,
+        scenario: "RoomsScenario",
+        np_random: np.random.Generator,
+        agent_pos: NDArray[np.float64] | None = None,
+    ) -> list[Position]:
+        """Spawn obstacles uniformly in free cells."""
+        positions = []
+
+        for _ in range(num_obstacles):
+            if scenario.free_cells:
+                chosen_idx = np_random.choice(len(scenario.free_cells))
+                new_pos = scenario.free_cells[chosen_idx]
+                positions.append(new_pos)
+                scenario.free_cells.pop(chosen_idx)
+
+        return positions
 
 
 class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float64]]]):
@@ -157,6 +568,23 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         self.doorway_pos: NDArray[np.float64] = np.array(
             list(self.doorways.values()), dtype=np.float64
         )
+
+        # Initialize spawn strategy
+        self.spawn_strategy = self._create_spawn_strategy()
+
+    def _create_spawn_strategy(self) -> SpawnStrategy:
+        """Factory method to create appropriate spawn strategy."""
+        assert self.config
+        method_config = self.config.spawn_config.spawn_method
+
+        if isinstance(method_config, FixedSpawnConfig):
+            return FixedSpawnStrategy()
+        elif isinstance(method_config, PathGaussianConfig):
+            return PathGaussianSpawnStrategy(method_config)
+        elif isinstance(method_config, UniformRandomConfig):
+            return UniformRandomSpawnStrategy(method_config)
+        else:
+            raise ValueError(f"Unknown spawn method config: {type(method_config)}")
 
     def init_agents(self, world: World, np_random=None) -> list[Agent]:
         assert self.config
@@ -259,41 +687,63 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
     def reset_landmarks(
         self, world: World, np_random: np.random.Generator
     ) -> list[Landmark]:
-        # Landmarks can have multiple possible positions given in the config as a list
-        # If so, randomly choose one of the positions for each landmark
+        """Reset landmarks using the configured spawn strategy."""
+        # Reset goal first
         goal_pos: CellPosition = self._choose_new_pos(
             self.goal.reset_config.spawn_pos, self.free_cells, np_random
         )
-        self.free_cells.remove(goal_pos)
+        if goal_pos in self.free_cells:
+            self.free_cells.remove(goal_pos)
 
-        lava_pos: list[Position] = []
-        for lava in self.lavas:
-            new_pos: CellPosition = self._choose_new_pos(
-                lava.reset_config.spawn_pos, self.free_cells, np_random
-            )
-            lava.state.pos = np.array([new_pos[0], new_pos[1]], dtype=np.float64)
-            lava_pos.append(new_pos)
-            # Remove the chosen cell from free cells
-            self.free_cells.remove(new_pos)
+        self.goal_pos = np.array((goal_pos[0], goal_pos[1]), dtype=np.float64)
+        self.goal.state.pos = self.goal_pos.copy()
 
-        hole_pos: list[Position] = []
-        for hole in self.holes:
-            new_pos: CellPosition = self._choose_new_pos(
-                hole.reset_config.spawn_pos, self.free_cells, np_random
-            )
-            hole.state.pos = np.array([new_pos[0], new_pos[1]], dtype=np.float64)
-            hole_pos.append(new_pos)
-            # Remove the chosen cell from free cells
-            self.free_cells.remove(new_pos)
+        # Get agent position (must be set before calling this)
+        agent_pos = world.agents[0].state.pos if world.agents else None
 
-        self.lava_pos: NDArray[np.float64] = np.array(lava_pos, dtype=np.float64)
-        self.hole_pos: NDArray[np.float64] = np.array(hole_pos, dtype=np.float64)
-        self.goal_pos: NDArray[np.float64] = np.array(
-            (goal_pos[0], goal_pos[1]), dtype=np.float64
+        # Use strategy pattern for obstacles
+        lava_positions = self.spawn_strategy.spawn_obstacles(
+            num_obstacles=len(self.lavas),
+            obstacle_type="lava",
+            world=world,
+            scenario=self,
+            np_random=np_random,
+            agent_pos=agent_pos,
         )
-        self.wall_pos: NDArray[np.float64] = np.array(
+
+        hole_positions = self.spawn_strategy.spawn_obstacles(
+            num_obstacles=len(self.holes),
+            obstacle_type="hole",
+            world=world,
+            scenario=self,
+            np_random=np_random,
+            agent_pos=agent_pos,
+        )
+
+        # Update landmark positions
+        for i, pos in enumerate(lava_positions):
+            if i < len(self.lavas):
+                self.lavas[i].state.pos = np.array(pos, dtype=np.float64)
+
+        for i, pos in enumerate(hole_positions):
+            if i < len(self.holes):
+                self.holes[i].state.pos = np.array(pos, dtype=np.float64)
+
+        # Store for observation
+        self.lava_pos = (
+            np.array(lava_positions, dtype=np.float64)
+            if lava_positions
+            else np.array([], dtype=np.float64).reshape(0, 2)
+        )
+        self.hole_pos = (
+            np.array(hole_positions, dtype=np.float64)
+            if hole_positions
+            else np.array([], dtype=np.float64).reshape(0, 2)
+        )
+        self.wall_pos = np.array(
             world.wall_collision_checker.wall_centers, dtype=np.float64
         )
+
         return world.landmarks
 
     @classmethod
