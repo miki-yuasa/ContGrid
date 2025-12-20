@@ -297,11 +297,14 @@ class TestRoomsEnv:
 
     def test_environment_termination_conditions(self):
         """Test different termination conditions"""
-        # Test with absorbing lava
+        # Test that agent can reach goal and terminate
+        # Place goal close to agent
         spawn_config = SpawnConfig(
             agent=(3.0, 3.0),
-            goal=ObjConfig(pos=(10.0, 10.0), reward=1.0, absorbing=True),
-            lavas=[ObjConfig(pos=(3.0, 3.0), reward=-5.0, absorbing=True)],
+            goal=ObjConfig(
+                pos=(3.5, 3.0), reward=10.0, absorbing=True
+            ),  # Very close to agent
+            lavas=[],
             holes=[],
         )
         config = RoomsScenarioConfig(spawn_config=spawn_config)
@@ -309,15 +312,76 @@ class TestRoomsEnv:
 
         observation, info = env.reset(seed=42)
 
-        # Agent should be at lava position, causing termination
-        action = np.array([0.01, 0.01])
-        observation, reward, termination, truncation, info = env.step(action)
+        # Move agent towards goal to trigger termination
+        terminated = False
+        final_reward = None
+        for _ in range(10):
+            action = np.array([0.1, 0.0])  # Move right towards goal
+            observation, reward, termination, truncation, info = env.step(action)
+            if termination:
+                terminated = True
+                final_reward = reward
+                break
 
-        # Should terminate due to lava
-        assert termination is True
-        assert reward == -5.0
+        # Should terminate due to reaching goal
+        assert terminated is True, "Agent should have reached goal and terminated"
+        assert final_reward == 10.0, f"Expected goal reward 10.0, got {final_reward}"
 
         env.close()
+
+    def test_no_agent_obstacle_overlap_at_spawn(self):
+        """Test that agent and obstacles don't overlap when spawned"""
+        # Test with various spawn configurations
+        for seed in [42, 123, 456]:
+            spawn_config = SpawnConfig(
+                agent=None,  # Random agent position
+                goal=ObjConfig(pos=(9, 8), reward=1.0, absorbing=False),
+                lavas=[
+                    ObjConfig(pos=None, reward=-1.0, absorbing=False),
+                    ObjConfig(pos=None, reward=-1.0, absorbing=False),
+                ],
+                holes=[
+                    ObjConfig(pos=None, reward=-0.5, absorbing=False),
+                    ObjConfig(pos=None, reward=-0.5, absorbing=False),
+                ],
+                spawn_method=PathGaussianConfig(
+                    gaussian_std=0.5,
+                    min_spacing=0.9,
+                    edge_buffer=0.3,
+                    include_agent_paths=True,
+                ),
+            )
+            config = RoomsScenarioConfig(spawn_config=spawn_config)
+            env = RoomsEnv(scenario_config=config)
+
+            observation, info = env.reset(seed=seed)
+
+            agent_pos = observation["agent_pos"]
+            agent_radius = env.scenario.config.spawn_config.agent_size
+            lava_radius = env.scenario.config.spawn_config.lava_size
+            hole_radius = env.scenario.config.spawn_config.hole_size
+
+            # Check no overlap with lavas
+            if len(observation["lava_pos"]) > 0:
+                lava_positions = agent_pos + observation["lava_pos"]
+                min_allowed_distance = agent_radius + lava_radius
+                for i, lava_pos in enumerate(lava_positions):
+                    distance = np.linalg.norm(lava_pos - agent_pos)
+                    assert distance >= min_allowed_distance, (
+                        f"Seed {seed}: Lava {i} overlaps with agent: distance={distance:.3f} < {min_allowed_distance:.3f}"
+                    )
+
+            # Check no overlap with holes
+            if len(observation["hole_pos"]) > 0:
+                hole_positions = agent_pos + observation["hole_pos"]
+                min_allowed_distance = agent_radius + hole_radius
+                for i, hole_pos in enumerate(hole_positions):
+                    distance = np.linalg.norm(hole_pos - agent_pos)
+                    assert distance >= min_allowed_distance, (
+                        f"Seed {seed}: Hole {i} overlaps with agent: distance={distance:.3f} < {min_allowed_distance:.3f}"
+                    )
+
+            env.close()
 
 
 class TestRoomsScenario:

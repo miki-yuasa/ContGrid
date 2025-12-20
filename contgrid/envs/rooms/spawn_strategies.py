@@ -90,13 +90,35 @@ class FixedSpawnStrategy(SpawnStrategy):
             scenario.lavas if obstacle_type == "lava" else scenario.holes
         )
 
+        obstacle_radius = (
+            scenario.config.spawn_config.lava_size
+            if obstacle_type == "lava"
+            else scenario.config.spawn_config.hole_size
+        )
+        agent_radius = scenario.config.spawn_config.agent_size
+        min_agent_distance = obstacle_radius + agent_radius
+
         for landmark in obstacle_landmarks[:num_obstacles]:
-            new_pos = scenario._choose_new_pos(
-                landmark.reset_config.spawn_pos, scenario.free_cells, np_random
-            )
-            positions.append(new_pos)
-            if new_pos in scenario.free_cells:
-                scenario.free_cells.remove(new_pos)
+            max_attempts = 100
+            for attempt in range(max_attempts):
+                new_pos = scenario._choose_new_pos(
+                    landmark.reset_config.spawn_pos, scenario.free_cells, np_random
+                )
+
+                # Check if position is valid (not overlapping with agent)
+                is_valid = True
+                if agent_pos is not None:
+                    if (
+                        np.linalg.norm(np.array(new_pos) - agent_pos)
+                        < min_agent_distance
+                    ):
+                        is_valid = False
+
+                if is_valid:
+                    positions.append(new_pos)
+                    if new_pos in scenario.free_cells:
+                        scenario.free_cells.remove(new_pos)
+                    break
 
         return positions
 
@@ -150,7 +172,13 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
 
         if not segments:
             return FixedSpawnStrategy().spawn_obstacles(
-                num_obstacles, obstacle_type, world, scenario, np_random, agent_pos
+                num_obstacles,
+                obstacle_type,
+                world,
+                scenario,
+                np_random,
+                agent_pos,
+                obstacle_configs,
             )
 
         # Weight segments by length and filter out zero-length segments
@@ -159,7 +187,13 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
 
         if not valid_mask.any():
             return FixedSpawnStrategy().spawn_obstacles(
-                num_obstacles, obstacle_type, world, scenario, np_random, agent_pos
+                num_obstacles,
+                obstacle_type,
+                world,
+                scenario,
+                np_random,
+                agent_pos,
+                obstacle_configs,
             )
 
         valid_segments = [seg for seg, valid in zip(segments, valid_mask) if valid]
@@ -237,11 +271,12 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                     scenario,
                     obstacle_type,
                     required_room,
+                    agent_pos,
                 ):
                     positions.append(tuple(perturbed_pos))
                     position_found = True
                     break
-            
+
             # If no valid position found after max_attempts, use a fallback position
             # within the required room or skip if no room constraint
             if not position_found:
@@ -249,16 +284,18 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                     # Try to sample a random position within the room boundaries with spacing check
                     room_bounds = self.topology.room_boundaries[required_room]
                     for fallback_attempt in range(max_attempts):
-                        fallback_pos = np.array([
-                            np_random.uniform(
-                                room_bounds["min_x"] + self.config.edge_buffer,
-                                room_bounds["max_x"] - self.config.edge_buffer,
-                            ),
-                            np_random.uniform(
-                                room_bounds["min_y"] + self.config.edge_buffer,
-                                room_bounds["max_y"] - self.config.edge_buffer,
-                            ),
-                        ])
+                        fallback_pos = np.array(
+                            [
+                                np_random.uniform(
+                                    room_bounds["min_x"] + self.config.edge_buffer,
+                                    room_bounds["max_x"] - self.config.edge_buffer,
+                                ),
+                                np_random.uniform(
+                                    room_bounds["min_y"] + self.config.edge_buffer,
+                                    room_bounds["max_y"] - self.config.edge_buffer,
+                                ),
+                            ]
+                        )
                         # Check if this fallback position is valid (spacing, no collisions, in correct room)
                         if self._is_valid_position(
                             fallback_pos,
@@ -267,6 +304,7 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                             scenario,
                             obstacle_type,
                             required_room,
+                            agent_pos,
                         ):
                             positions.append(tuple(fallback_pos))
                             break
@@ -336,6 +374,7 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         scenario: "RoomsScenario",  # type: ignore
         obstacle_type: str,
         required_room: str | None = None,
+        agent_pos: NDArray[np.float64] | None = None,
     ) -> bool:
         """Check if position is valid for obstacle spawning."""
         assert scenario.config
@@ -346,6 +385,7 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
             if obstacle_type == "lava"
             else scenario.config.spawn_config.hole_size
         )
+        agent_radius = scenario.config.spawn_config.agent_size
 
         # Check if position is in the required room
         if required_room is not None and self.topology is not None:
@@ -384,6 +424,12 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         if np.linalg.norm(pos - scenario.goal_pos) < scenario.goal_thr_dist + 0.5:
             return False
 
+        # Check not overlapping with agent
+        if agent_pos is not None:
+            min_distance = obstacle_radius + agent_radius
+            if np.linalg.norm(pos - agent_pos) < min_distance:
+                return False
+
         return True
 
 
@@ -417,6 +463,14 @@ class UniformRandomSpawnStrategy(SpawnStrategy):
                 config.room for config in obstacle_configs[:num_obstacles]
             ]
 
+        obstacle_radius = (
+            scenario.config.spawn_config.lava_size
+            if obstacle_type == "lava"
+            else scenario.config.spawn_config.hole_size
+        )
+        agent_radius = scenario.config.spawn_config.agent_size
+        min_agent_distance = obstacle_radius + agent_radius
+
         for obstacle_idx in range(num_obstacles):
             required_room = room_constraints[obstacle_idx]
 
@@ -428,6 +482,14 @@ class UniformRandomSpawnStrategy(SpawnStrategy):
                 ]
             else:
                 available_cells = scenario.free_cells
+
+            # Filter out cells that are too close to agent
+            if agent_pos is not None:
+                available_cells = [
+                    cell
+                    for cell in available_cells
+                    if np.linalg.norm(np.array(cell) - agent_pos) >= min_agent_distance
+                ]
 
             if available_cells:
                 chosen_idx = np_random.choice(len(available_cells))
