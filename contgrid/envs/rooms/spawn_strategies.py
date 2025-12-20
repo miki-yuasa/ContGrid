@@ -200,6 +200,10 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         valid_lengths = lengths[valid_mask]
         probabilities = valid_lengths / valid_lengths.sum()
 
+        # Track failed positions for spatial rejection sampling
+        failed_regions: list[tuple[NDArray[np.float64], float]] = []
+        max_failed_regions = 50  # Limit memory usage
+
         max_attempts = 100
         for obstacle_idx in range(num_obstacles):
             required_room = room_constraints[obstacle_idx]
@@ -264,6 +268,22 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                         room_bounds["max_y"] - self.config.edge_buffer,
                     )
 
+                # Spatial rejection sampling: skip if near recent failures
+                # Only check last 10 failures to keep it fast
+                too_close_to_failure = False
+                if len(failed_regions) > 0:
+                    recent_failures = failed_regions[-min(10, len(failed_regions)) :]
+                    for failure_center, failure_radius in recent_failures:
+                        if (
+                            np.linalg.norm(perturbed_pos - failure_center)
+                            < failure_radius
+                        ):
+                            too_close_to_failure = True
+                            break
+
+                if too_close_to_failure:
+                    continue
+
                 if self._is_valid_position(
                     perturbed_pos,
                     world,
@@ -276,6 +296,13 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                     positions.append(tuple(perturbed_pos))
                     position_found = True
                     break
+                else:
+                    # Track this failure region to avoid it in future attempts
+                    if len(failed_regions) < max_failed_regions:
+                        # Store center and radius (use min_spacing as exclusion radius)
+                        failed_regions.append(
+                            (perturbed_pos.copy(), self.config.min_spacing)
+                        )
 
             # If no valid position found after max_attempts, use a fallback position
             # within the required room or skip if no room constraint
