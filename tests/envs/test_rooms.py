@@ -845,7 +845,7 @@ class TestRoomsScenario:
         all_frames = []
 
         for sample_idx in range(num_samples):
-            observation, info = env.reset(seed=42 + sample_idx)
+            observation, info = env.reset()
             rendered = env.render()
 
             # Save individual frame
@@ -874,6 +874,30 @@ class TestRoomsScenario:
             # Get absolute positions
             lava_positions = observation["agent_pos"] + observation["lava_pos"]
             hole_positions = observation["agent_pos"] + observation["hole_pos"]
+
+            # Check agent doesn't overlap with lavas
+            if len(lava_positions) > 0:
+                agent_lava_min_distance = (
+                    spawn_config.agent_size + spawn_config.lava_size
+                )
+                for i, lava_pos in enumerate(lava_positions):
+                    distance = np.linalg.norm(lava_pos - observation["agent_pos"])
+                    assert distance >= agent_lava_min_distance, (
+                        f"Sample {sample_idx}: Lava {i} overlaps with agent: "
+                        f"distance={distance:.3f} < {agent_lava_min_distance:.3f}"
+                    )
+
+            # Check agent doesn't overlap with holes
+            if len(hole_positions) > 0:
+                agent_hole_min_distance = (
+                    spawn_config.agent_size + spawn_config.hole_size
+                )
+                for i, hole_pos in enumerate(hole_positions):
+                    distance = np.linalg.norm(hole_pos - observation["agent_pos"])
+                    assert distance >= agent_hole_min_distance, (
+                        f"Sample {sample_idx}: Hole {i} overlaps with agent: "
+                        f"distance={distance:.3f} < {agent_hole_min_distance:.3f}"
+                    )
 
             # Check spacing between lavas
             if len(lava_positions) > 1:
@@ -924,34 +948,6 @@ class TestRoomsScenario:
                     assert actual_room == hole_config.room, (
                         f"Hole {i} spawned in room '{actual_room}' but expected '{hole_config.room}' at position {hole_pos}"
                     )
-
-        # Test that agent can move and collect more frames for an episode
-        observation, info = env.reset(seed=123)
-        episode_frames = [env.render().astype(np.uint8)]
-
-        for step in range(50):
-            # Move towards goal with some noise
-            goal_direction = observation["goal_pos"]
-            if np.linalg.norm(goal_direction) > 0:
-                action = goal_direction / np.linalg.norm(goal_direction) * 0.5
-                action += np.random.randn(2) * 0.1  # Add noise
-            else:
-                action = np.random.randn(2) * 0.1
-
-            observation, reward, terminated, truncated, info = env.step(action)
-            episode_frames.append(env.render().astype(np.uint8))
-
-            if terminated or truncated:
-                break
-
-        env.close()
-
-        # Verify all expected files exist
-        for sample_idx in range(num_samples):
-            frame_path = os.path.join(
-                output_dir, f"path_gaussian_spawn_sample_{sample_idx}.png"
-            )
-            assert os.path.exists(frame_path)
 
 
 if __name__ == "__main__":

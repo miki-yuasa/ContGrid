@@ -166,6 +166,18 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         else:
             raise ValueError(f"Unknown spawn method config: {type(method_config)}")
 
+    def reset_world(self, world: World, np_random: np.random.Generator) -> None:
+        """Reset world with agents first, then landmarks.
+
+        This override ensures agents are positioned before obstacles are spawned,
+        so that obstacle spawning can avoid overlapping with the agent.
+        """
+        self._pre_reset_world(world, np_random)
+        # Reset agents FIRST so their positions are known
+        world.agents = self.reset_agents(world, np_random)
+        # Then reset landmarks, which can use agent positions to avoid overlaps
+        world.landmarks = self.reset_landmarks(world, np_random)
+
     def init_agents(self, world: World, np_random=None) -> list[Agent]:
         assert self.config
         agent = Agent(
@@ -241,7 +253,46 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 raise ValueError("Invalid spawn_pos type")
 
     def _pre_reset_world(self, world: World, np_random: Generator) -> None:
+        """Pre-reset initialization.
+
+        Initialize free_cells and remove fixed obstacle positions to prevent
+        agent from spawning on top of obstacles.
+        """
+        assert self.config
         self.free_cells: list[CellPosition] = self.init_free_cells.copy()
+
+        # Remove fixed obstacle positions from free_cells to prevent agent overlap
+        # This must happen before agent spawning if we reset agents before obstacles
+
+        # Remove fixed goal position
+        goal_spawn_pos = self._format_spawn_pos(self.goal.reset_config.spawn_pos)
+        if goal_spawn_pos is not None and not isinstance(goal_spawn_pos, list):
+            if goal_spawn_pos in self.free_cells:
+                self.free_cells.remove(goal_spawn_pos)
+
+        # Remove fixed lava positions
+        for lava in self.lavas:
+            lava_spawn_pos = self._format_spawn_pos(lava.reset_config.spawn_pos)
+            if lava_spawn_pos is not None:
+                if isinstance(lava_spawn_pos, list):
+                    for pos in lava_spawn_pos:
+                        if pos in self.free_cells:
+                            self.free_cells.remove(pos)
+                else:
+                    if lava_spawn_pos in self.free_cells:
+                        self.free_cells.remove(lava_spawn_pos)
+
+        # Remove fixed hole positions
+        for hole in self.holes:
+            hole_spawn_pos = self._format_spawn_pos(hole.reset_config.spawn_pos)
+            if hole_spawn_pos is not None:
+                if isinstance(hole_spawn_pos, list):
+                    for pos in hole_spawn_pos:
+                        if pos in self.free_cells:
+                            self.free_cells.remove(pos)
+                else:
+                    if hole_spawn_pos in self.free_cells:
+                        self.free_cells.remove(hole_spawn_pos)
 
     def reset_agents(self, world: World, np_random: np.random.Generator) -> list[Agent]:
         assert self.config

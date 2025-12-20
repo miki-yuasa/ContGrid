@@ -29,9 +29,9 @@ class PathGaussianConfig(BaseModel):
     """Configuration for path-based Gaussian spawning."""
 
     mode: Literal[SpawnMode.PATH_GAUSSIAN] = SpawnMode.PATH_GAUSSIAN
-    gaussian_std: float = 0.5
-    min_spacing: float = 0.9
-    edge_buffer: float = 0.3
+    gaussian_std: float = 0.6
+    min_spacing: float = 1.0
+    edge_buffer: float = 0.05
     include_agent_paths: bool = True
 
 
@@ -426,8 +426,7 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
 
         # Check not overlapping with agent
         if agent_pos is not None:
-            min_distance = obstacle_radius + agent_radius
-            if np.linalg.norm(pos - agent_pos) < min_distance:
+            if np.linalg.norm(pos - agent_pos) < self.config.min_spacing:
                 return False
 
         return True
