@@ -13,7 +13,6 @@ from contgrid.core import (
     BaseScenario,
     Color,
     EntityState,
-    Grid,
     Landmark,
     ResetConfig,
     SpawnPos,

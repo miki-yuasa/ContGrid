@@ -189,6 +189,7 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                     room_lengths = valid_lengths[room_segment_indices]
                     room_probabilities = room_lengths / room_lengths.sum()
 
+            position_found = False
             for attempt in range(max_attempts):
                 segment_idx = np_random.choice(
                     len(room_valid_segments), p=room_probabilities
@@ -235,9 +236,41 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                     positions + existing_obstacles,
                     scenario,
                     obstacle_type,
+                    required_room,
                 ):
                     positions.append(tuple(perturbed_pos))
+                    position_found = True
                     break
+            
+            # If no valid position found after max_attempts, use a fallback position
+            # within the required room or skip if no room constraint
+            if not position_found:
+                if required_room is not None:
+                    # Try to sample a random position within the room boundaries with spacing check
+                    room_bounds = self.topology.room_boundaries[required_room]
+                    for fallback_attempt in range(max_attempts):
+                        fallback_pos = np.array([
+                            np_random.uniform(
+                                room_bounds["min_x"] + self.config.edge_buffer,
+                                room_bounds["max_x"] - self.config.edge_buffer,
+                            ),
+                            np_random.uniform(
+                                room_bounds["min_y"] + self.config.edge_buffer,
+                                room_bounds["max_y"] - self.config.edge_buffer,
+                            ),
+                        ])
+                        # Check if this fallback position is valid (spacing, no collisions, in correct room)
+                        if self._is_valid_position(
+                            fallback_pos,
+                            world,
+                            positions + existing_obstacles,
+                            scenario,
+                            obstacle_type,
+                            required_room,
+                        ):
+                            positions.append(tuple(fallback_pos))
+                            break
+                # If still no position found after fallback attempts, skip this obstacle
 
         return positions
 
@@ -302,6 +335,7 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         existing_positions: list[Position],
         scenario: "RoomsScenario",  # type: ignore
         obstacle_type: str,
+        required_room: str | None = None,
     ) -> bool:
         """Check if position is valid for obstacle spawning."""
         assert scenario.config
@@ -312,6 +346,12 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
             if obstacle_type == "lava"
             else scenario.config.spawn_config.hole_size
         )
+
+        # Check if position is in the required room
+        if required_room is not None and self.topology is not None:
+            actual_room = self.topology.get_room(pos)
+            if actual_room != required_room:
+                return False
 
         # Check bounds with buffer
         if not (

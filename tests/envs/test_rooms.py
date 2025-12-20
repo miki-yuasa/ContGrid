@@ -60,9 +60,12 @@ class TestRoomsEnv:
             "goal_pos",
             "lava_pos",
             "hole_pos",
+            "doorway_pos",
             "goal_dist",
             "lava_dist",
             "hole_dist",
+            "wall_dist",
+            "doorway_dist",
         }
         assert set(observation.keys()) == expected_keys
 
@@ -74,8 +77,7 @@ class TestRoomsEnv:
 
         # Check info structure (info is populated during steps, not reset)
         assert isinstance(info, dict)
-        # Info should be empty after reset
-        assert len(info) == 0
+        # Info is populated after reset with distances and other metadata
 
         env.close()
 
@@ -95,9 +97,12 @@ class TestRoomsEnv:
             "goal_pos",
             "lava_pos",
             "hole_pos",
+            "doorway_pos",
             "goal_dist",
             "lava_dist",
             "hole_dist",
+            "wall_dist",
+            "doorway_dist",
         }
         assert set(obs_space.spaces.keys()) == expected_keys
 
@@ -156,7 +161,7 @@ class TestRoomsEnv:
             holes=[],  # No holes for this test
         )
         config = RoomsScenarioConfig(spawn_config=spawn_config)
-        env = RoomsEnv(config=config)
+        env = RoomsEnv(scenario_config=config)
 
         observation, info = env.reset(seed=42)
 
@@ -188,7 +193,7 @@ class TestRoomsEnv:
         config = RoomsScenarioConfig(
             spawn_config=spawn_config, reward_config=reward_config
         )
-        env = RoomsEnv(config=config)
+        env = RoomsEnv(scenario_config=config)
 
         observation, info = env.reset(seed=42)
 
@@ -216,16 +221,18 @@ class TestRoomsEnv:
             spawn_config=custom_spawn, reward_config=custom_reward
         )
 
-        env = RoomsEnv(config=custom_config)
+        env = RoomsEnv(scenario_config=custom_config)
         observation, info = env.reset(seed=42)
 
         # Check that agent is at expected position
         expected_pos = np.array([2.0, 2.0])
         np.testing.assert_array_almost_equal(observation["agent_pos"], expected_pos)
 
-        # Check that goal is at expected position
-        expected_goal = np.array([8.0, 8.0])
-        np.testing.assert_array_almost_equal(observation["goal_pos"], expected_goal)
+        # Check that goal is at expected relative position (goal_pos is relative to agent)
+        expected_goal_relative = np.array([6.0, 6.0])  # (8,8) - (2,2)
+        np.testing.assert_array_almost_equal(
+            observation["goal_pos"], expected_goal_relative
+        )
 
         # Check that we have the right number of obstacles
         assert observation["lava_pos"].shape == (1, 2)  # 1 lava with (x, y) coordinates
@@ -250,7 +257,7 @@ class TestRoomsEnv:
 
     def test_multiple_episodes(self):
         """Test running multiple episodes"""
-        env = RoomsEnv(max_episode_steps=10)
+        env = RoomsEnv()
 
         for episode in range(3):
             observation, info = env.reset(seed=42 + episode)
@@ -298,7 +305,7 @@ class TestRoomsEnv:
             holes=[],
         )
         config = RoomsScenarioConfig(spawn_config=spawn_config)
-        env = RoomsEnv(config=config)
+        env = RoomsEnv(scenario_config=config)
 
         observation, info = env.reset(seed=42)
 
@@ -318,7 +325,9 @@ class TestRoomsScenario:
 
     def test_scenario_initialization(self):
         """Test RoomsScenario initialization"""
-        scenario = RoomsScenario()
+        scenario = RoomsScenario(
+            config=DEFAULT_ROOMS_SCENARIO_CONFIG, world_config=DEFAULT_WORLD_CONFIG
+        )
 
         assert scenario.config == DEFAULT_ROOMS_SCENARIO_CONFIG
         assert scenario.world_config == DEFAULT_WORLD_CONFIG
@@ -330,7 +339,9 @@ class TestRoomsScenario:
 
     def test_get_closest_method(self):
         """Test the get_closest utility method"""
-        scenario = RoomsScenario()
+        scenario = RoomsScenario(
+            config=DEFAULT_ROOMS_SCENARIO_CONFIG, world_config=DEFAULT_WORLD_CONFIG
+        )
 
         # Test with some objects
         pos = np.array([0.0, 0.0])
@@ -350,9 +361,13 @@ class TestRoomsScenario:
 
     def test_observation_contains_all_elements(self):
         """Test that observation contains all expected elements"""
-        scenario = RoomsScenario()
+        scenario = RoomsScenario(
+            config=DEFAULT_ROOMS_SCENARIO_CONFIG, world_config=DEFAULT_WORLD_CONFIG
+        )
         world = scenario.make_world()
-        scenario.reset_landmarks(world, np.random.RandomState(42))
+        np_random = np.random.RandomState(42)
+        scenario._pre_reset_world(world, np_random)  # Initialize free_cells
+        scenario.reset_landmarks(world, np_random)
 
         agent = world.agents[0]
         obs = scenario.observation(agent, world)
@@ -363,9 +378,12 @@ class TestRoomsScenario:
             "goal_pos",
             "lava_pos",
             "hole_pos",
+            "doorway_pos",
             "goal_dist",
             "lava_dist",
             "hole_dist",
+            "wall_dist",
+            "doorway_dist",
         }
         assert set(obs.keys()) == expected_keys
 
@@ -729,8 +747,16 @@ class TestRoomsScenario:
                 ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_left"),
                 ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_right"),
                 ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_right"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_right"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_right"),
             ],
             holes=[
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_right"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_right"),
                 ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_left"),
                 ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_left"),
                 ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_right"),
@@ -738,10 +764,11 @@ class TestRoomsScenario:
             ],
             spawn_method=PathGaussianConfig(
                 gaussian_std=0.6,
-                min_spacing=0.9,
-                edge_buffer=0.4,
+                min_spacing=1.0,
+                edge_buffer=0.05,
                 include_agent_paths=True,
             ),
+            agent_size=0.1,
             goal_size=0.4,
             lava_size=0.4,
             hole_size=0.4,
@@ -772,10 +799,10 @@ class TestRoomsScenario:
             all_frames.append(rendered.astype(np.uint8))
 
             # Verify obstacles are placed
-            assert len(env.scenario.lavas) == 4
-            assert len(env.scenario.holes) == 4
-            assert observation["lava_pos"].shape[0] <= 6
-            assert observation["hole_pos"].shape[0] <= 4
+            assert len(env.scenario.lavas) == 8  # 8 lavas configured
+            assert len(env.scenario.holes) == 8  # 8 holes configured
+            assert observation["lava_pos"].shape[0] <= 8
+            assert observation["hole_pos"].shape[0] <= 8
 
             # Verify minimum spacing between obstacles
             min_spacing = 0.9
