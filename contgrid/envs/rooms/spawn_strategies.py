@@ -2,11 +2,11 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel
+from pydantic import BaseModel, Discriminator
 
 from contgrid.core import World
 from contgrid.core.typing import Position
@@ -48,8 +48,11 @@ class FixedSpawnConfig(BaseModel):
     mode: Literal[SpawnMode.FIXED] = SpawnMode.FIXED
 
 
-# Union type for all spawn method configs
-SpawnMethodConfig = PathGaussianConfig | UniformRandomConfig | FixedSpawnConfig
+# Union type for all spawn method configs with discriminator
+SpawnMethodConfig = Annotated[
+    PathGaussianConfig | UniformRandomConfig | FixedSpawnConfig,
+    Discriminator("mode"),
+]
 
 
 class SpawnStrategy(ABC):
