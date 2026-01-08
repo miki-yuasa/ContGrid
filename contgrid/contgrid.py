@@ -25,21 +25,16 @@ from contgrid.core.action import (
 from contgrid.core.const import ALPHABET
 from contgrid.core.entities import Entity, EntityShape
 from contgrid.core.grid import Grid
+from contgrid.core.render import (
+    DEFAULT_RENDER_CONFIG,
+    EnvRenderer,
+    RenderConfig,
+    Renderer,
+)
 from contgrid.core.scenario import BaseScenario, ScenarioConfigT
 from contgrid.core.typing import Position
 from contgrid.core.utils import AgentSelector
 from contgrid.core.world import Agent, World
-
-
-class RenderConfig(BaseModel):
-    render_mode: Literal["human", "rgb_array"] = "rgb_array"
-    draw_grid: bool = False
-    width_px: int = 700
-    height_px: int = 700
-    dpi: int = 100
-
-
-DEFAULT_RENDER_CONFIG = RenderConfig()
 
 
 class ActionOption(StrEnum):
@@ -79,6 +74,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         scenario: BaseScenario[ScenarioConfigT, ObsType],
         max_cycles: int | None = None,
         render_config: RenderConfig = DEFAULT_RENDER_CONFIG,
+        custom_renderers: list[Renderer] | None = None,
         action_config: ActionModeConfig = DEFAULT_ACTION_CONFIG,
         local_ratio: float | None = None,
         verbose: bool = False,
@@ -109,6 +105,9 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         self.ax = None
         self.max_size = 1
         self.verbose: bool = verbose
+        self.renderers: list[Renderer] = [EnvRenderer(render_config)] + (
+            custom_renderers or []
+        )
 
         # Set up the drawing window
 
@@ -357,7 +356,9 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         self.enable_render(self.render_mode)
         assert self.fig is not None and self.ax is not None
 
-        self.draw()
+        for renderer in self.renderers:
+            renderer.render(self.fig, self.ax, self.world, self.grid)
+
         # Tight layout often produces better results
         self.fig.tight_layout(pad=0)
         # Save the plot for debug
@@ -372,107 +373,6 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             plt.draw()
             plt.pause(1.0 / self.metadata["render_fps"])
             return
-
-    def draw(self, alphabet: str = ALPHABET):
-        # clear axes
-        assert self.ax is not None, (
-            "Call enable_render() or set render_mode to human or rgb_array"
-        )
-        # update bounds to center around agent
-        all_poses = [entity.draw_pos for entity in self.world.all_entities]
-
-        # Find the limits of the environment
-        all_poses_np = np.array(all_poses)
-        x_min, y_min = np.min(all_poses_np, axis=0)
-
-        self.ax.clear()
-        self.ax.set_xlim(x_min, x_min + self.grid.width)
-        self.ax.set_ylim(y_min, y_min + self.grid.height)
-        self.ax.set_aspect("equal")
-        self.ax.axis("off")
-        self.ax.set_facecolor("white")
-
-        # If draw_grid is enabled, draw the grid lines
-        if self.render_config.draw_grid:
-            # Draw grid lines
-            for x in range(self.grid.width_cells + 1):
-                self.ax.axvline(x=x_min + x, color="black", linewidth=0.5, zorder=1)
-            for y in range(self.grid.height_cells + 1):
-                self.ax.axhline(y=y_min + y, color="black", linewidth=0.5, zorder=1)
-
-        # The scaling factor is used for dynamic rescaling of the rendering - a.k.a Zoom In/Zoom Out effect
-        # The 0.9 is a factor to keep the entities from appearing "too" out-of-bounds
-
-        # update geometry and text positions
-        text_line = 0
-        for entity in self.world.all_entities:
-            # geometry
-            x: float
-            y: float
-            x, y = entity.state.pos
-
-            assert entity.color
-            self._draw_shape(entity)
-
-            # text
-            if isinstance(entity, Agent):
-                if entity.silent:
-                    continue
-                if np.all(entity.state.c == 0):
-                    word = "_"
-                # elif self.action_opt in self.continuous_modes:
-                #     word = (
-                #         "[" + ",".join([f"{comm:.2f}" for comm in entity.state.c]) + "]"
-                #     )
-                else:
-                    word = alphabet[np.argmax(entity.state.c)]
-
-                message = entity.name + " sends " + word + "   "
-                message_x_pos = self.width * 0.05
-                message_y_pos = self.height * 0.95 - (self.height * 0.05 * text_line)
-                self.ax.text(
-                    message_x_pos, message_y_pos, message, fontsize=12, color="black"
-                )
-                text_line += 1
-
-    def _draw_shape(self, entity: Entity):
-        # Convert color tuple to matplotlib-compatible format (0-1 range)
-        x: float = entity.draw_pos[0]
-        y: float = entity.draw_pos[1]
-        size: float = entity.size
-        shape: EntityShape = entity.shape
-        color_normalized = tuple(c / 255.0 for c in entity.color)
-        assert self.ax
-        if shape == EntityShape.CIRCLE:
-            # Draw filled circle
-            circle = patches.Circle(
-                (x, y),
-                size,
-                facecolor=color_normalized,
-                edgecolor="black",
-                linewidth=0.5,
-                zorder=2,
-                hatch=entity.hatch,
-                hatch_linewidth=0.3,
-            )
-            self.ax.add_patch(circle)
-        elif shape == EntityShape.SQUARE:
-            # Draw filled rectangle (square)
-            line_width: float = 0.0 if self.render_config.draw_grid else 0.5
-            rect = patches.Rectangle(
-                (x, y),
-                size,
-                size,
-                facecolor=color_normalized,
-                edgecolor="black",
-                linewidth=line_width,
-                zorder=0,
-                hatch=entity.hatch,
-                hatch_linewidth=0.3,
-            )
-            self.ax.add_patch(rect)
-        else:
-            raise ValueError(f"Unknown shape: {shape}")
 
     def close(self):
         if self.fig is not None:
