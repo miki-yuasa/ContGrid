@@ -346,7 +346,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
                 plt.ion()  # Turn on interactive mode
             self.render_on = True
 
-    def render(self):
+    def render(self) -> NDArray[np.uint8] | None:
         if self.render_mode is None:
             gymnasium.logger.warn(
                 "You are calling render method without specifying any render mode."

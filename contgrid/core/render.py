@@ -3,8 +3,10 @@ from typing import Any, Literal
 
 import matplotlib.patches as patches
 import numpy as np
+from gymnasium.core import Env
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from .agent import Agent
@@ -178,3 +180,203 @@ class EnvRenderer(Renderer):
             ax.add_patch(rect)
         else:
             raise ValueError(f"Unknown shape: {shape}")
+
+
+class PostRenderer(ABC):
+    """
+    Abstract base class for post-renderers that add additional elements to the rendering after the main environment's `env.render()` is called.
+    """
+
+    @abstractmethod
+    def render(self, fig: Figure, ax: Axes, env: Env, **kwargs: Any) -> None:
+        """
+        Render additional elements onto the given matplotlib figure and axes.
+
+        Parameters
+        ----------
+        fig : Figure
+            Matplotlib figure to render on.
+        ax : Axes
+            Matplotlib axes to render on.
+        env : Env
+            The gymnasium environment being rendered.
+        **kwargs : Any
+            Additional rendering options specific to the renderer implementation.
+        """
+        pass
+
+    def get_image(self, fig: Figure) -> NDArray[np.uint8]:
+        """
+        Extract RGB image array from the figure canvas.
+
+        Parameters
+        ----------
+        fig : Figure
+            Matplotlib figure to extract image from.
+
+        Returns
+        -------
+        NDArray[np.uint8]
+            RGB array of the rendered image.
+        """
+        fig.canvas.draw()
+        buf = fig.canvas.buffer_rgba()  # type: ignore[attr-defined]
+        img_array = np.asarray(buf)
+        # Convert RGBA to RGB
+        return img_array[:, :, :3].astype(np.uint8)
+
+
+class DiscreteActionVectorRenderer(PostRenderer):
+    """
+    Renderer for environments with discrete action vectors.
+    Draws arrows representing action probabilities, centered at the agent's position,
+    with arrow lengths proportional to probabilities.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> # Define 4 cardinal directions
+    >>> vectors = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]], dtype=np.float64)
+    >>> renderer = DiscreteActionVectorRenderer(vectors, agent_idx=0)
+    >>> 
+    >>> # Update probabilities and render
+    >>> probs = np.array([0.5, 0.3, 0.1, 0.1])
+    >>> renderer.set_probabilities(probs)
+    >>> renderer.render(fig, ax, env)
+    """
+
+    def __init__(
+        self,
+        action_vectors: NDArray[np.float64],
+        agent_idx: int = 0,
+        max_arrow_length: float = 0.5,
+        arrow_color: str = "blue",
+        arrow_alpha: float = 0.7,
+        arrow_width: float = 0.02,
+        head_width: float = 0.08,
+        head_length: float = 0.05,
+        min_prob_threshold: float = 0.01,
+    ) -> None:
+        """
+        Initialize the discrete action vector renderer.
+
+        Parameters
+        ----------
+        action_vectors : NDArray[np.float64]
+            Array of shape (num_actions, 2) where each row is a direction vector (x, y).
+            These vectors define the possible discrete actions.
+        agent_idx : int
+            Index of the agent to render arrows for.
+        max_arrow_length : float
+            Maximum length of arrows when probability is 1.0.
+        arrow_color : str
+            Color of the arrows.
+        arrow_alpha : float
+            Base alpha (transparency) of the arrows.
+        arrow_width : float
+            Width of the arrow shaft.
+        head_width : float
+            Width of the arrow head.
+        head_length : float
+            Length of the arrow head.
+        min_prob_threshold : float
+            Minimum probability threshold below which arrows are not drawn.
+        """
+        self.action_vectors = action_vectors
+        self.agent_idx = agent_idx
+        self.max_arrow_length = max_arrow_length
+        self.arrow_color = arrow_color
+        self.arrow_alpha = arrow_alpha
+        self.arrow_width = arrow_width
+        self.head_width = head_width
+        self.head_length = head_length
+        self.min_prob_threshold = min_prob_threshold
+
+        # Normalize action vectors to unit vectors for consistent scaling
+        norms = np.linalg.norm(action_vectors, axis=1, keepdims=True)
+        # Avoid division by zero for zero vectors
+        norms = np.where(norms == 0, 1, norms)
+        self.unit_vectors = action_vectors / norms
+
+        # Initialize with uniform probabilities
+        self.probabilities: NDArray[np.float64] = np.ones(len(action_vectors)) / len(
+            action_vectors
+        )
+
+    def set_probabilities(self, probabilities: NDArray[np.float64]) -> None:
+        """
+        Update the action probabilities.
+
+        Parameters
+        ----------
+        probabilities : NDArray[np.float64]
+            Array of shape (num_actions,) containing probabilities for each action.
+
+        Raises
+        ------
+        ValueError
+            If probabilities length doesn't match the number of action vectors.
+        """
+        if len(probabilities) != len(self.action_vectors):
+            raise ValueError(
+                f"Probabilities length ({len(probabilities)}) must match "
+                f"action_vectors length ({len(self.action_vectors)})"
+            )
+        self.probabilities = probabilities
+
+    def render(self, fig: Figure, ax: Axes, env: Env, **kwargs: Any) -> None:
+        """
+        Render action probability arrows onto the given matplotlib axes.
+
+        Parameters
+        ----------
+        fig : Figure
+            Matplotlib figure to render on.
+        ax : Axes
+            Matplotlib axes to render on.
+        env : Env
+            The gymnasium environment, expected to have a `world` attribute with agents.
+        **kwargs : Any
+            Optional keyword arguments:
+            - probabilities: NDArray[np.float64] - Override stored probabilities for this render
+            - agent_idx: int - Override stored agent index for this render
+        """
+        # Allow overriding probabilities and agent_idx per render call
+        probabilities = kwargs.get("probabilities", self.probabilities)
+        agent_idx = kwargs.get("agent_idx", self.agent_idx)
+
+        # Get agent position from environment
+        if not hasattr(env, "world"):
+            return
+
+        world: World = env.world  # type: ignore
+        if agent_idx >= len(world.agents):
+            return
+
+        agent = world.agents[agent_idx]
+        agent_pos = agent.state.pos
+
+        # Draw arrows for each action
+        for unit_vec, prob in zip(self.unit_vectors, probabilities):
+            if prob < self.min_prob_threshold:
+                continue
+
+            # Scale arrow length by probability
+            arrow_length = prob * self.max_arrow_length
+            dx = unit_vec[0] * arrow_length
+            dy = unit_vec[1] * arrow_length
+
+            # Draw arrow from agent position
+            ax.arrow(
+                agent_pos[0],
+                agent_pos[1],
+                dx,
+                dy,
+                color=self.arrow_color,
+                alpha=self.arrow_alpha * prob,  # More transparent for lower probabilities
+                width=self.arrow_width,
+                head_width=self.head_width,
+                head_length=self.head_length,
+                length_includes_head=True,
+                zorder=10,
+            )
