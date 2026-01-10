@@ -238,7 +238,7 @@ class DiscreteActionVectorRenderer(PostRenderer):
     >>> # Define 4 cardinal directions
     >>> vectors = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]], dtype=np.float64)
     >>> renderer = DiscreteActionVectorRenderer(vectors, agent_idx=0)
-    >>> 
+    >>>
     >>> # Update probabilities and render
     >>> probs = np.array([0.5, 0.3, 0.1, 0.1])
     >>> renderer.set_probabilities(probs)
@@ -373,7 +373,8 @@ class DiscreteActionVectorRenderer(PostRenderer):
                 dx,
                 dy,
                 color=self.arrow_color,
-                alpha=self.arrow_alpha * prob,  # More transparent for lower probabilities
+                alpha=self.arrow_alpha
+                * prob,  # More transparent for lower probabilities
                 width=self.arrow_width,
                 head_width=self.head_width,
                 head_length=self.head_length,
