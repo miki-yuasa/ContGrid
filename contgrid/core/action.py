@@ -4,7 +4,7 @@ from typing import Any, Generic
 
 import numpy as np
 from gymnasium.core import ActType
-from gymnasium.spaces import Box, MultiDiscrete, Space
+from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
@@ -397,3 +397,114 @@ class DiscreteAngDirectional(ActionMode[NDArray[np.integer]]):
         summed_action = np.stack([dir_sum, vel_sum], axis=1)
 
         return summed_action
+
+
+class DiscreteAng(ActionMode[np.integer]):
+    """
+    Discrete action for angle direction (0 to num_directions-1) and discrete action for velocity magnitude (0 to u_range) with num_vel_discrete bins,
+    and communication (i.e., 1 dimension).
+    """
+
+    name: str = "discrete_ang"
+
+    def __init__(self, num_directions: int) -> None:
+        self.num_directions = num_directions
+        self.urange: float = 0
+
+    def define_action_space(self, agent: Agent) -> Space[np.integer]:
+        nvecs: list[int] = []
+        if agent.movable:
+            nvecs += [self.num_directions]  # discrete directions
+            self.urange = agent.u_range
+        else:
+            raise ValueError("Agent must be movable for DiscreteAng action mode.")
+        if not agent.silent:
+            # nvecs += [1]  # communication
+            raise NotImplementedError(
+                "Communication not implemented for DiscreteAng action mode."
+            )
+        return Discrete(nvecs[0])
+
+    def update_agent_action(
+        self, agent: Agent, action: np.integer, world: World
+    ) -> None:
+        self._zero_agent_actions(agent, world)
+
+        if agent.movable:
+            x_vel, y_vel = self.action2xy_vel(action, agent)
+            agent.action.u[0] += x_vel
+            agent.action.u[1] += y_vel
+
+            self._apply_sensitivity(agent, agent.accel)
+
+    def action2xy_vel(self, action: np.integer, agent: Agent) -> tuple[float, float]:
+        direction_idx = int(action)
+
+        angle = (direction_idx / self.num_directions) * 2 * np.pi
+        magnitude = agent.u_range
+
+        x_vel = magnitude * np.cos(angle)
+        y_vel = magnitude * np.sin(angle)
+
+        return x_vel, y_vel
+
+    def sum_actions(
+        self,
+        action_1: NDArray[np.integer],
+        action_2: NDArray[np.integer],
+        weight: float = 0.5,
+    ) -> NDArray[np.integer]:
+        """
+        Sum two discrete ang-directional actions using weighted average for direction and velocity.
+
+        Parameters
+        ----------
+        action_1 : NDArray[np.integer]
+            The first action to be summed. Shape should be (n_envs, 2) where the first element is direction index and the second is velocity index.
+        action_2 : NDArray[np.integer]
+            The second action to be summed. Shape should be (n_envs, 2) where the first element is direction index and the second is velocity index.
+        weight : float, optional
+            The weight for the first action in the summation, by default 0.5.
+
+        Returns
+        -------
+        summed_action: NDArray[np.integer]
+            The resulting summed action. Shape is (n_envs, 2) where the first element is direction index and the second is velocity index.
+
+        """
+        # Extract direction and velocity indices for both actions
+        # Shape: (n_envs,)
+        dir_1 = action_1
+        dir_2 = action_2
+
+        # Convert direction indices to angles
+        angle_1 = (dir_1 / self.num_directions) * 2 * np.pi
+        angle_2 = (dir_2 / self.num_directions) * 2 * np.pi
+
+        # Convert velocity indices to magnitudes (normalized to [0, 1])
+        mag_1 = self.urange
+        mag_2 = self.urange
+
+        # Convert to Cartesian coordinates
+        x_1 = mag_1 * np.cos(angle_1)
+        y_1 = mag_1 * np.sin(angle_1)
+        x_2 = mag_2 * np.cos(angle_2)
+        y_2 = mag_2 * np.sin(angle_2)
+
+        # Weighted sum in Cartesian space
+        x_sum = weight * x_1 + (1 - weight) * x_2
+        y_sum = weight * y_1 + (1 - weight) * y_2
+
+        # Convert back to polar coordinates
+        mag_sum = np.sqrt(x_sum**2 + y_sum**2)
+        angle_sum = np.arctan2(y_sum, x_sum)
+
+        # Normalize angle to [0, 2*pi]
+        angle_sum = np.mod(angle_sum, 2 * np.pi)
+
+        # Convert back to discrete indices
+        dir_sum = (angle_sum / (2 * np.pi)) * self.num_directions
+        # Handle wrap-around for direction
+        dir_sum = np.mod(dir_sum, self.num_directions)
+
+        return dir_sum.astype(np.integer)

@@ -2,7 +2,6 @@ from enum import StrEnum
 from typing import Any, Generic, Literal, SupportsFloat
 
 import gymnasium
-import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 from gymnasium import Env, spaces
@@ -18,12 +17,11 @@ from contgrid.core.action import (
     ActionModeConfig,
     ContinuousFullVelocity,
     ContinuousMinimalVelocity,
+    DiscreteAng,
     DiscreteAngDirectional,
     DiscreteDirectionVelocity,
     DiscreteMinimalVelocity,
 )
-from contgrid.core.const import ALPHABET
-from contgrid.core.entities import Entity, EntityShape
 from contgrid.core.grid import Grid
 from contgrid.core.render import (
     DEFAULT_RENDER_CONFIG,
@@ -34,7 +32,7 @@ from contgrid.core.render import (
 from contgrid.core.scenario import BaseScenario, ScenarioConfigT
 from contgrid.core.typing import Position
 from contgrid.core.utils import AgentSelector
-from contgrid.core.world import Agent, World
+from contgrid.core.world import World
 
 
 class ActionOption(StrEnum):
@@ -67,6 +65,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         DiscreteMinimalVelocity.name: DiscreteMinimalVelocity,
         DiscreteDirectionVelocity.name: DiscreteDirectionVelocity,
         DiscreteAngDirectional.name: DiscreteAngDirectional,
+        DiscreteAng.name: DiscreteAng,
     }
 
     def __init__(
