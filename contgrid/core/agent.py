@@ -48,7 +48,7 @@ class AgentConfig(BaseModel, Generic[CallbackT]):
     density: float = 25
     color: str = Color.SKY_BLUE.name
     max_speed: float | None = None
-    accel: float = 1.0
+    accel: float = 5.0
     state: AgentState = AgentState()
     initial_mass: float = 1
     silent: bool = True
@@ -81,7 +81,7 @@ class Agent(Entity[AgentState], Generic[CallbackT]):  # properties of agent enti
         density: float = 25,
         color: str = Color.SKY_BLUE.name,
         max_speed: float | None = None,
-        accel: float = 1.0,
+        accel: float = 5.0,
         state: AgentState = AgentState(),
         initial_mass: float = 1,
         reset_config: ResetConfig = ResetConfig(),
