@@ -207,7 +207,7 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         failed_regions: list[tuple[NDArray[np.float64], float]] = []
         max_failed_regions = 50  # Limit memory usage
 
-        max_attempts = 100
+        max_attempts = 10_000
         for obstacle_idx in range(num_obstacles):
             required_room = room_constraints[obstacle_idx]
 
