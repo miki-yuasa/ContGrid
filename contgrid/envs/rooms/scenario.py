@@ -328,29 +328,35 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         # Use strategy pattern for obstacles
         assert self.config
-        lava_positions = self.spawn_strategy.spawn_obstacles(
-            num_obstacles=len(self.lavas),
-            obstacle_type="lava",
-            world=world,
-            scenario=self,
-            np_random=np_random,
-            agent_pos=agent_pos,
-            obstacle_configs=self.config.spawn_config.lavas,
-        )
+        while True:
+            lava_positions = self.spawn_strategy.spawn_obstacles(
+                num_obstacles=len(self.lavas),
+                obstacle_type="lava",
+                world=world,
+                scenario=self,
+                np_random=np_random,
+                agent_pos=agent_pos,
+                obstacle_configs=self.config.spawn_config.lavas,
+            )
+            if len(set(lava_positions)) == len(lava_positions):
+                break
 
         for i, pos in enumerate(lava_positions):
             if i < len(self.lavas):
                 self.lavas[i].state.pos = np.array(pos, dtype=np.float64)
 
-        hole_positions = self.spawn_strategy.spawn_obstacles(
-            num_obstacles=len(self.holes),
-            obstacle_type="hole",
-            world=world,
-            scenario=self,
-            np_random=np_random,
-            agent_pos=agent_pos,
-            obstacle_configs=self.config.spawn_config.holes,
-        )
+        while True:
+            hole_positions = self.spawn_strategy.spawn_obstacles(
+                num_obstacles=len(self.holes),
+                obstacle_type="hole",
+                world=world,
+                scenario=self,
+                np_random=np_random,
+                agent_pos=agent_pos,
+                obstacle_configs=self.config.spawn_config.holes,
+            )
+            if len(set(hole_positions)) == len(hole_positions):
+                break
 
         for i, pos in enumerate(hole_positions):
             if i < len(self.holes):
