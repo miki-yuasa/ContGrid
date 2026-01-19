@@ -338,7 +338,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 agent_pos=agent_pos,
                 obstacle_configs=self.config.spawn_config.lavas,
             )
-            if len(set(lava_positions)) == len(lava_positions):
+            if len(self.lavas) == len(lava_positions):
                 break
 
         for i, pos in enumerate(lava_positions):
@@ -355,7 +355,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 agent_pos=agent_pos,
                 obstacle_configs=self.config.spawn_config.holes,
             )
-            if len(set(hole_positions)) == len(hole_positions):
+            if len(self.holes) == len(hole_positions):
                 break
 
         for i, pos in enumerate(hole_positions):
