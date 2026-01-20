@@ -109,11 +109,19 @@ class SpawnConfig(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
+class ObservationConfig(BaseModel):
+    """Configuration for observations in the Rooms scenario."""
+
+    lava_dist: Literal["closest", "all"] = "closest"
+    hole_dist: Literal["closest", "all"] = "closest"
+
+
 class RoomsScenarioConfig(BaseModel):
     """Configuration for the Rooms scenario."""
 
     spawn_config: SpawnConfig = SpawnConfig()
     reward_config: RewardConfig = RewardConfig(step_penalty=0.01)
+    observation_config: ObservationConfig = ObservationConfig()
 
 
 class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float64]]]):
@@ -422,10 +430,19 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["hole_pos"] = self.hole_pos.copy() - agent.state.pos.copy()
         obs["doorway_pos"] = self.doorway_pos.copy() - agent.state.pos.copy()
         obs["goal_dist"] = np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
-        lava_dist, _ = self.get_closest(agent.state.pos, self.lava_pos)
-        obs["lava_dist"] = np.array([lava_dist], dtype=np.float64)
-        hole_dist, _ = self.get_closest(agent.state.pos, self.hole_pos)
-        obs["hole_dist"] = np.array([hole_dist], dtype=np.float64)
+        assert self.config
+        if self.config.observation_config.lava_dist == "all":
+            lava_dists = np.linalg.norm(self.lava_pos - agent.state.pos, axis=1)
+            obs["lava_dist"] = lava_dists.astype(np.float64)
+        else:
+            lava_dist, _ = self.get_closest(agent.state.pos, self.lava_pos)
+            obs["lava_dist"] = np.array([lava_dist], dtype=np.float64)
+        if self.config.observation_config.hole_dist == "all":
+            hole_dists = np.linalg.norm(self.hole_pos - agent.state.pos, axis=1)
+            obs["hole_dist"] = hole_dists.astype(np.float64)
+        else:
+            hole_dist, _ = self.get_closest(agent.state.pos, self.hole_pos)
+            obs["hole_dist"] = np.array([hole_dist], dtype=np.float64)
         wall_dist, _ = self.get_closest(agent.state.pos, self.wall_pos)
         obs["wall_dist"] = np.array([wall_dist], dtype=np.float64)
         obs["doorway_dist"] = self._get_doorway_distances(agent)
@@ -438,6 +455,18 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         num_lavas = len(self.lavas)
         num_holes = len(self.holes)
         max_dist = np.linalg.norm(high_bound - low_bound)
+
+        assert self.config
+        lava_dist_shape = (
+            (1,)
+            if self.config.observation_config.lava_dist == "closest"
+            else (num_lavas,)
+        )
+        hole_dist_shape = (
+            (1,)
+            if self.config.observation_config.hole_dist == "closest"
+            else (num_holes,)
+        )
 
         return spaces.Dict(
             {
@@ -478,10 +507,10 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                     low=0.0, high=max_dist, shape=(1,), dtype=np.float64
                 ),
                 "lava_dist": spaces.Box(
-                    low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                    low=0.0, high=max_dist, shape=lava_dist_shape, dtype=np.float64
                 ),
                 "hole_dist": spaces.Box(
-                    low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                    low=0.0, high=max_dist, shape=hole_dist_shape, dtype=np.float64
                 ),
                 "wall_dist": spaces.Box(
                     low=0.0, high=max_dist, shape=(1,), dtype=np.float64
