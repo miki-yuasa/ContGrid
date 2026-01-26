@@ -211,16 +211,15 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         for obstacle_idx in range(num_obstacles):
             required_room = room_constraints[obstacle_idx]
 
-            # Filter segments to only those in the required room if specified
+            # Filter segments to only those that pass through the required room
             room_valid_segments = valid_segments
             room_probabilities = probabilities
 
             if required_room is not None:
                 room_segment_indices = []
                 for idx, seg in enumerate(valid_segments):
-                    start_room = self.topology.get_room(seg.start)
-                    end_room = self.topology.get_room(seg.end)
-                    if start_room == required_room or end_room == required_room:
+                    # Check if segment passes through the required room
+                    if self._segment_intersects_room(seg, required_room):
                         room_segment_indices.append(idx)
 
                 if room_segment_indices:
@@ -257,19 +256,11 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                     base_pos + parallel_noise * direction + perp_noise * perpendicular
                 )
 
-                # Clip to room boundaries if room constraint is specified
+                # Skip if position is outside the required room (don't clip - that would move it off segment)
                 if required_room is not None:
-                    room_bounds = self.topology.room_boundaries[required_room]
-                    perturbed_pos[0] = np.clip(
-                        perturbed_pos[0],
-                        room_bounds["min_x"] + self.config.edge_buffer,
-                        room_bounds["max_x"] - self.config.edge_buffer,
-                    )
-                    perturbed_pos[1] = np.clip(
-                        perturbed_pos[1],
-                        room_bounds["min_y"] + self.config.edge_buffer,
-                        room_bounds["max_y"] - self.config.edge_buffer,
-                    )
+                    actual_room = self.topology.get_room(perturbed_pos)
+                    if actual_room != required_room:
+                        continue
 
                 # Spatial rejection sampling: skip if near recent failures
                 # Only check last 10 failures to keep it fast
@@ -307,40 +298,144 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                             (perturbed_pos.copy(), self.config.min_spacing)
                         )
 
-            # If no valid position found after max_attempts, use a fallback position
-            # within the required room or skip if no room constraint
+            # If no valid position found after max_attempts, try systematic segment sampling
+            # This ensures we stay on segments rather than falling back to random room sampling
             if not position_found:
-                if required_room is not None:
-                    # Try to sample a random position within the room boundaries with spacing check
-                    room_bounds = self.topology.room_boundaries[required_room]
-                    for fallback_attempt in range(max_attempts):
-                        fallback_pos = np.array(
-                            [
-                                np_random.uniform(
-                                    room_bounds["min_x"] + self.config.edge_buffer,
-                                    room_bounds["max_x"] - self.config.edge_buffer,
-                                ),
-                                np_random.uniform(
-                                    room_bounds["min_y"] + self.config.edge_buffer,
-                                    room_bounds["max_y"] - self.config.edge_buffer,
-                                ),
-                            ]
-                        )
-                        # Check if this fallback position is valid (spacing, no collisions, in correct room)
-                        if self._is_valid_position(
-                            fallback_pos,
-                            world,
-                            positions + existing_obstacles,
-                            scenario,
-                            obstacle_type,
-                            required_room,
-                            agent_pos,
-                        ):
-                            positions.append(tuple(fallback_pos))
-                            break
-                # If still no position found after fallback attempts, skip this obstacle
+                position_found = self._try_systematic_segment_sampling(
+                    room_valid_segments,
+                    positions,
+                    existing_obstacles,
+                    world,
+                    scenario,
+                    obstacle_type,
+                    required_room,
+                    agent_pos,
+                    np_random,
+                )
+                if position_found:
+                    # _try_systematic_segment_sampling appends to positions directly
+                    pass
+                # If still no position found, skip this obstacle (don't use random fallback)
 
         return positions
+
+    def _try_systematic_segment_sampling(
+        self,
+        segments: list["LineSegment"],
+        positions: list[Position],
+        existing_obstacles: list[Position],
+        world: World,
+        scenario: "RoomsScenario",  # type: ignore
+        obstacle_type: str,
+        required_room: str | None,
+        agent_pos: NDArray[np.float64] | None,
+        np_random: np.random.Generator,
+    ) -> bool:
+        """
+        Try systematic sampling along segments to find a valid position.
+
+        This method samples points at regular intervals along each segment,
+        with small random offsets to avoid deterministic patterns while staying on segments.
+
+        Returns True if a valid position was found and appended to positions.
+        """
+        from .topology import LineSegment
+
+        if not segments:
+            return False
+
+        # Try each segment with systematic sampling
+        # Shuffle segment order to add randomness
+        segment_order = list(range(len(segments)))
+        np_random.shuffle(segment_order)
+
+        # Fewer samples for efficiency
+        num_samples_per_segment = 20
+
+        for seg_idx in segment_order:
+            segment = segments[seg_idx]
+            seg_length = segment.length()
+
+            if seg_length < 1e-6:
+                continue
+
+            # Generate sample points along the segment
+            # Use evenly spaced points with small random perturbation
+            t_values = np.linspace(0.05, 0.95, num_samples_per_segment)
+            np_random.shuffle(t_values)
+
+            for t in t_values:
+                # Add small perturbation to t (staying within segment)
+                t_perturbed = t + np_random.uniform(-0.02, 0.02)
+                t_perturbed = np.clip(t_perturbed, 0.01, 0.99)
+
+                sample_pos = segment.sample_point(t_perturbed)
+
+                # For zero gaussian_std, don't apply any noise - stay exactly on segment
+                # For non-zero std, apply Gaussian noise
+                if self.config.gaussian_std > 0:
+                    direction = segment.end - segment.start
+                    norm = np.linalg.norm(direction)
+                    if norm > 1e-6:
+                        direction = direction / norm
+                        perpendicular = np.array([-direction[1], direction[0]])
+                    else:
+                        direction = np.array([1.0, 0.0])
+                        perpendicular = np.array([0.0, 1.0])
+
+                    parallel_noise = np_random.normal(0, self.config.gaussian_std)
+                    perp_noise = np_random.normal(0, self.config.gaussian_std)
+                    sample_pos = (
+                        sample_pos
+                        + parallel_noise * direction
+                        + perp_noise * perpendicular
+                    )
+
+                # Check if point is in the required room (don't clip, just skip if not)
+                if required_room is not None and self.topology is not None:
+                    actual_room = self.topology.get_room(sample_pos)
+                    if actual_room != required_room:
+                        continue
+
+                if self._is_valid_position(
+                    sample_pos,
+                    world,
+                    positions + existing_obstacles,
+                    scenario,
+                    obstacle_type,
+                    required_room,
+                    agent_pos,
+                ):
+                    positions.append(tuple(sample_pos))
+                    return True
+
+        return False
+
+    def _segment_intersects_room(self, segment: "LineSegment", room_name: str) -> bool:
+        """
+        Check if a segment passes through or intersects a room.
+
+        This samples points along the segment and checks if any fall within the room.
+        """
+        if self.topology is None:
+            return False
+
+        # Check endpoints first
+        start_room = self.topology.get_room(segment.start)
+        end_room = self.topology.get_room(segment.end)
+
+        if start_room == room_name or end_room == room_name:
+            return True
+
+        # Sample points along the segment to check if it passes through the room
+        num_samples = 10
+        for i in range(1, num_samples):
+            t = i / num_samples
+            point = segment.sample_point(t)
+            if self.topology.get_room(point) == room_name:
+                return True
+
+        return False
 
     def _get_existing_obstacles(self, scenario: "RoomsScenario") -> list[Position]:  # type: ignore
         """Get all existing obstacle positions (lavas and holes already spawned)."""

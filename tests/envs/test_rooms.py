@@ -949,6 +949,113 @@ class TestRoomsScenario:
                         f"Hole {i} spawned in room '{actual_room}' but expected '{hole_config.room}' at position {hole_pos}"
                     )
 
+    def test_path_gaussian_spawn_zero_std_on_segments(self):
+        """Test that when gaussian_std=0, obstacles are spawned exactly on path segments."""
+        from contgrid.envs.rooms.topology import LineSegment, get_relevant_path_segments
+
+        def point_to_segment_distance(point: np.ndarray, segment: LineSegment) -> float:
+            """Calculate minimum distance from a point to a line segment."""
+            # Vector from start to end
+            v = segment.end - segment.start
+            # Vector from start to point
+            w = point - segment.start
+
+            # Length squared of segment
+            c1 = np.dot(w, v)
+            c2 = np.dot(v, v)
+
+            if c2 < 1e-10:  # Degenerate segment (point)
+                return float(np.linalg.norm(point - segment.start))
+
+            # Parameter t for closest point on line
+            t = c1 / c2
+
+            # Clamp t to [0, 1] to stay on segment
+            t = max(0.0, min(1.0, t))
+
+            # Closest point on segment
+            closest = segment.start + t * v
+
+            return float(np.linalg.norm(point - closest))
+
+        def min_distance_to_any_segment(
+            point: np.ndarray, segments: list[LineSegment]
+        ) -> float:
+            """Find minimum distance from point to any segment in the list."""
+            if not segments:
+                return float("inf")
+            return min(point_to_segment_distance(point, seg) for seg in segments)
+
+        # Create config with gaussian_std=0 (no perturbation)
+        spawn_config = SpawnConfig(
+            agent=(3.0, 3.0),  # Fixed agent position for reproducibility
+            goal=ObjConfig(pos=(9, 8), reward=1.0, absorbing=False),
+            lavas=[
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_right"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_right"),
+            ],
+            holes=[
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_left"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="top_right"),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False, room="bottom_right"),
+            ],
+            spawn_method=PathGaussianConfig(
+                gaussian_std=0.0,  # Zero std - should spawn exactly on segments
+                min_spacing=0.5,
+                edge_buffer=0.05,
+                include_agent_paths=True,
+            ),
+            agent_size=0.1,
+            goal_size=0.4,
+            lava_size=0.2,
+            hole_size=0.2,
+        )
+        config = RoomsScenarioConfig(spawn_config=spawn_config)
+        env = RoomsEnv(scenario_config=config)
+
+        # Test with multiple seeds
+        tolerance = 1e-6  # Floating point tolerance
+
+        for seed in [42, 123, 456, 789, 1000]:
+            observation, info = env.reset(seed=seed)
+
+            # Get the path segments that were used for spawning
+            topology = RoomTopology(config.spawn_config.doorways)
+            agent_pos = observation["agent_pos"]
+
+            segments = get_relevant_path_segments(
+                agent_pos,
+                env.scenario.goal_pos,
+                env.scenario.doorways,
+                topology,
+                env.world.grid,
+            )
+
+            # Get absolute positions of obstacles
+            lava_positions = agent_pos + observation["lava_pos"]
+            hole_positions = agent_pos + observation["hole_pos"]
+
+            # Check each lava is on a segment
+            for i, lava_pos in enumerate(lava_positions):
+                dist = min_distance_to_any_segment(lava_pos, segments)
+                assert dist < tolerance, (
+                    f"Seed {seed}: Lava {i} at {lava_pos} is not on any segment. "
+                    f"Min distance to segments: {dist:.8f}"
+                )
+
+            # Check each hole is on a segment
+            for i, hole_pos in enumerate(hole_positions):
+                dist = min_distance_to_any_segment(hole_pos, segments)
+                assert dist < tolerance, (
+                    f"Seed {seed}: Hole {i} at {hole_pos} is not on any segment. "
+                    f"Min distance to segments: {dist:.8f}"
+                )
+
+        env.close()
+
 
 if __name__ == "__main__":
     # Allow running tests directly
