@@ -256,11 +256,11 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                     base_pos + parallel_noise * direction + perp_noise * perpendicular
                 )
 
-                # Skip if position is outside the required room (don't clip - that would move it off segment)
+                # Clip position to room boundaries if required room is specified
                 if required_room is not None:
-                    actual_room = self.topology.get_room(perturbed_pos)
-                    if actual_room != required_room:
-                        continue
+                    perturbed_pos = self._clip_to_room_bounds(
+                        perturbed_pos, required_room
+                    )
 
                 # Spatial rejection sampling: skip if near recent failures
                 # Only check last 10 failures to keep it fast
@@ -391,11 +391,9 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
                         + perp_noise * perpendicular
                     )
 
-                # Check if point is in the required room (don't clip, just skip if not)
-                if required_room is not None and self.topology is not None:
-                    actual_room = self.topology.get_room(sample_pos)
-                    if actual_room != required_room:
-                        continue
+                # Clip position to room boundaries if required room is specified
+                if required_room is not None:
+                    sample_pos = self._clip_to_room_bounds(sample_pos, required_room)
 
                 if self._is_valid_position(
                     sample_pos,
@@ -421,10 +419,9 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
             return False
 
         # Check endpoints first
-        start_room = self.topology.get_room(segment.start)
-        end_room = self.topology.get_room(segment.end)
-
-        if start_room == room_name or end_room == room_name:
+        if self._is_position_in_room(segment.start, room_name):
+            return True
+        if self._is_position_in_room(segment.end, room_name):
             return True
 
         # Sample points along the segment to check if it passes through the room
@@ -432,10 +429,64 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         for i in range(1, num_samples):
             t = i / num_samples
             point = segment.sample_point(t)
-            if self.topology.get_room(point) == room_name:
+            if self._is_position_in_room(point, room_name):
                 return True
 
         return False
+
+    def _is_position_in_room(
+        self, pos: NDArray[np.float64] | Position, room_name: str
+    ) -> bool:
+        """
+        Check if a position is strictly within the room boundaries.
+
+        Uses explicit boundary checks for robustness.
+        """
+        if self.topology is None:
+            return False
+
+        # Get room boundaries
+        if room_name not in self.topology.room_boundaries:
+            return False
+
+        bounds = self.topology.room_boundaries[room_name]
+        x, y = float(pos[0]), float(pos[1])
+
+        # Strict boundary check
+        return (
+            bounds["min_x"] <= x <= bounds["max_x"]
+            and bounds["min_y"] <= y <= bounds["max_y"]
+        )
+
+    def _clip_to_room_bounds(
+        self, pos: NDArray[np.float64], room_name: str
+    ) -> NDArray[np.float64]:
+        """
+        Clip a position to be within the room boundaries with edge buffer.
+
+        Returns a new position that is guaranteed to be within the room.
+        """
+        if self.topology is None:
+            return pos
+
+        if room_name not in self.topology.room_boundaries:
+            return pos
+
+        bounds = self.topology.room_boundaries[room_name]
+        clipped = pos.copy()
+
+        clipped[0] = np.clip(
+            clipped[0],
+            bounds["min_x"] + self.config.edge_buffer,
+            bounds["max_x"] - self.config.edge_buffer,
+        )
+        clipped[1] = np.clip(
+            clipped[1],
+            bounds["min_y"] + self.config.edge_buffer,
+            bounds["max_y"] - self.config.edge_buffer,
+        )
+
+        return clipped
 
     def _get_existing_obstacles(self, scenario: "RoomsScenario") -> list[Position]:  # type: ignore
         """Get all existing obstacle positions (lavas and holes already spawned)."""
@@ -513,9 +564,8 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         agent_radius = scenario.config.spawn_config.agent_size
 
         # Check if position is in the required room
-        if required_room is not None and self.topology is not None:
-            actual_room = self.topology.get_room(pos)
-            if actual_room != required_room:
+        if required_room is not None:
+            if not self._is_position_in_room(pos, required_room):
                 return False
 
         # Check bounds with buffer
