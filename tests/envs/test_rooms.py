@@ -987,6 +987,8 @@ class TestRoomsScenario:
             return min(point_to_segment_distance(point, seg) for seg in segments)
 
         # Create config with gaussian_std=0 (no perturbation)
+        # Note: min_spacing is reduced to 0.3 to allow obstacles to fit on shorter
+        # room-clipped segments (e.g., bottom_right has a ~1.27 unit segment)
         spawn_config = SpawnConfig(
             agent=(3.0, 3.0),  # Fixed agent position for reproducibility
             goal=ObjConfig(pos=(9, 8), reward=1.0, absorbing=False),
@@ -1004,7 +1006,7 @@ class TestRoomsScenario:
             ],
             spawn_method=PathGaussianConfig(
                 gaussian_std=0.0,  # Zero std - should spawn exactly on segments
-                min_spacing=0.5,
+                min_spacing=0.3,  # Reduced from 0.5 to fit on short segments
                 edge_buffer=0.05,
                 include_agent_paths=True,
             ),
@@ -1017,6 +1019,8 @@ class TestRoomsScenario:
         env = RoomsEnv(scenario_config=config)
 
         # Test with multiple seeds
+        # With segment clipping to room boundaries, obstacles should be exactly on
+        # the clipped segments when gaussian_std=0 (within floating point tolerance)
         tolerance = 1e-6  # Floating point tolerance
 
         for seed in [42, 123, 456, 789, 1000]:
@@ -1038,19 +1042,66 @@ class TestRoomsScenario:
             lava_positions = agent_pos + observation["lava_pos"]
             hole_positions = agent_pos + observation["hole_pos"]
 
-            # Check each lava is on a segment
+            # Helper to clip segment to room bounds (matches spawn_strategies logic)
+            def clip_segment_to_room(
+                seg: LineSegment, room_name: str
+            ) -> LineSegment | None:
+                bounds = topology.room_boundaries[room_name]
+                edge_buffer = 0.05
+                x1, y1 = float(seg.start[0]), float(seg.start[1])
+                x2, y2 = float(seg.end[0]), float(seg.end[1])
+                dx, dy = x2 - x1, y2 - y1
+                min_x = bounds["min_x"] + edge_buffer
+                max_x = bounds["max_x"] - edge_buffer
+                min_y = bounds["min_y"] + edge_buffer
+                max_y = bounds["max_y"] - edge_buffer
+                t0, t1 = 0.0, 1.0
+                p = [-dx, dx, -dy, dy]
+                q = [x1 - min_x, max_x - x1, y1 - min_y, max_y - y1]
+                for i in range(4):
+                    if abs(p[i]) < 1e-10:
+                        if q[i] < 0:
+                            return None
+                    else:
+                        t = q[i] / p[i]
+                        if p[i] < 0:
+                            t0 = max(t0, t)
+                        else:
+                            t1 = min(t1, t)
+                if t0 > t1:
+                    return None
+                return LineSegment(
+                    np.array([x1 + t0 * dx, y1 + t0 * dy]),
+                    np.array([x1 + t1 * dx, y1 + t1 * dy]),
+                )
+
+            # Check each lava is on a clipped segment for its room
             for i, lava_pos in enumerate(lava_positions):
-                dist = min_distance_to_any_segment(lava_pos, segments)
+                room = config.spawn_config.lavas[i].room
+                clipped_segs = [
+                    cs
+                    for seg in segments
+                    if (cs := clip_segment_to_room(seg, room)) is not None
+                    and np.linalg.norm(cs.end - cs.start) > 1e-6
+                ]
+                dist = min_distance_to_any_segment(lava_pos, clipped_segs)
                 assert dist < tolerance, (
-                    f"Seed {seed}: Lava {i} at {lava_pos} is not on any segment. "
+                    f"Seed {seed}: Lava {i} at {lava_pos} is not on any clipped segment. "
                     f"Min distance to segments: {dist:.8f}"
                 )
 
-            # Check each hole is on a segment
+            # Check each hole is on a clipped segment for its room
             for i, hole_pos in enumerate(hole_positions):
-                dist = min_distance_to_any_segment(hole_pos, segments)
+                room = config.spawn_config.holes[i].room
+                clipped_segs = [
+                    cs
+                    for seg in segments
+                    if (cs := clip_segment_to_room(seg, room)) is not None
+                    and np.linalg.norm(cs.end - cs.start) > 1e-6
+                ]
+                dist = min_distance_to_any_segment(hole_pos, clipped_segs)
                 assert dist < tolerance, (
-                    f"Seed {seed}: Hole {i} at {hole_pos} is not on any segment. "
+                    f"Seed {seed}: Hole {i} at {hole_pos} is not on any clipped segment. "
                     f"Min distance to segments: {dist:.8f}"
                 )
 
