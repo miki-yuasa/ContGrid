@@ -336,7 +336,10 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         # Use strategy pattern for obstacles
         assert self.config
-        while True:
+        max_spawn_attempts = 100
+
+        # Spawn lavas
+        for attempt in range(max_spawn_attempts):
             lava_positions = self.spawn_strategy.spawn_obstacles(
                 num_obstacles=len(self.lavas),
                 obstacle_type="lava",
@@ -348,12 +351,32 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             )
             if len(self.lavas) == len(lava_positions):
                 break
+        else:
+            # Fallback to uniform random sampling for remaining lavas
+            if len(lava_positions) < len(self.lavas):
+                fallback_strategy = UniformRandomSpawnStrategy(
+                    UniformRandomConfig(min_spacing=0.9)
+                )
+                remaining_configs = self.config.spawn_config.lavas[
+                    len(lava_positions) :
+                ]
+                additional_positions = fallback_strategy.spawn_obstacles(
+                    num_obstacles=len(self.lavas) - len(lava_positions),
+                    obstacle_type="lava",
+                    world=world,
+                    scenario=self,
+                    np_random=np_random,
+                    agent_pos=agent_pos,
+                    obstacle_configs=remaining_configs,
+                )
+                lava_positions.extend(additional_positions)
 
         for i, pos in enumerate(lava_positions):
             if i < len(self.lavas):
                 self.lavas[i].state.pos = np.array(pos, dtype=np.float64)
 
-        while True:
+        # Spawn holes
+        for attempt in range(max_spawn_attempts):
             hole_positions = self.spawn_strategy.spawn_obstacles(
                 num_obstacles=len(self.holes),
                 obstacle_type="hole",
@@ -365,6 +388,25 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             )
             if len(self.holes) == len(hole_positions):
                 break
+        else:
+            # Fallback to uniform random sampling for remaining holes
+            if len(hole_positions) < len(self.holes):
+                fallback_strategy = UniformRandomSpawnStrategy(
+                    UniformRandomConfig(min_spacing=0.9)
+                )
+                remaining_configs = self.config.spawn_config.holes[
+                    len(hole_positions) :
+                ]
+                additional_positions = fallback_strategy.spawn_obstacles(
+                    num_obstacles=len(self.holes) - len(hole_positions),
+                    obstacle_type="hole",
+                    world=world,
+                    scenario=self,
+                    np_random=np_random,
+                    agent_pos=agent_pos,
+                    obstacle_configs=remaining_configs,
+                )
+                hole_positions.extend(additional_positions)
 
         for i, pos in enumerate(hole_positions):
             if i < len(self.holes):
