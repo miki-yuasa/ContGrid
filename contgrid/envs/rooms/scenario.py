@@ -160,6 +160,10 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         self.spawn_strategy = self._create_spawn_strategy()
 
+        self.room_scale: float = max(
+            self.world_config.grid.width, self.world_config.grid.height
+        )
+
     def _create_spawn_strategy(self) -> SpawnStrategy:
         """Factory method to create appropriate spawn strategy."""
         assert self.config
@@ -466,28 +470,45 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
     def observation(self, agent: Agent, world: World) -> dict[str, NDArray[np.float64]]:
         obs = {}
-        obs["agent_pos"] = agent.state.pos.copy()
-        obs["goal_pos"] = self.goal_pos.copy() - agent.state.pos.copy()
-        obs["lava_pos"] = self.lava_pos.copy() - agent.state.pos.copy()
-        obs["hole_pos"] = self.hole_pos.copy() - agent.state.pos.copy()
-        obs["doorway_pos"] = self.doorway_pos.copy() - agent.state.pos.copy()
-        obs["goal_dist"] = np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
+        obs["agent_pos"] = agent.state.pos.copy() / self.room_scale
+        obs["goal_pos"] = (
+            self.goal_pos.copy() - agent.state.pos.copy()
+        ) / self.room_scale
+        obs["lava_pos"] = (
+            self.lava_pos.copy() - agent.state.pos.copy()
+        ) / self.room_scale
+        obs["hole_pos"] = (
+            self.hole_pos.copy() - agent.state.pos.copy()
+        ) / self.room_scale
+        obs["doorway_pos"] = (
+            self.doorway_pos.copy() - agent.state.pos.copy()
+        ) / self.room_scale
+        obs["goal_dist"] = (
+            np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
+            / self.room_scale
+        )
         assert self.config
         if self.config.observation_config.lava_dist == "all":
-            lava_dists = np.linalg.norm(self.lava_pos - agent.state.pos, axis=1)
+            lava_dists = (
+                np.linalg.norm(self.lava_pos - agent.state.pos, axis=1)
+                / self.room_scale
+            )
             obs["lava_dist"] = lava_dists.astype(np.float64)
         else:
             lava_dist, _ = self.get_closest(agent.state.pos, self.lava_pos)
-            obs["lava_dist"] = np.array([lava_dist], dtype=np.float64)
+            obs["lava_dist"] = np.array([lava_dist], dtype=np.float64) / self.room_scale
         if self.config.observation_config.hole_dist == "all":
-            hole_dists = np.linalg.norm(self.hole_pos - agent.state.pos, axis=1)
+            hole_dists = (
+                np.linalg.norm(self.hole_pos - agent.state.pos, axis=1)
+                / self.room_scale
+            )
             obs["hole_dist"] = hole_dists.astype(np.float64)
         else:
             hole_dist, _ = self.get_closest(agent.state.pos, self.hole_pos)
-            obs["hole_dist"] = np.array([hole_dist], dtype=np.float64)
+            obs["hole_dist"] = np.array([hole_dist], dtype=np.float64) / self.room_scale
         wall_dist, _ = self.get_closest(agent.state.pos, self.wall_pos)
-        obs["wall_dist"] = np.array([wall_dist], dtype=np.float64)
-        obs["doorway_dist"] = self._get_doorway_distances(agent)
+        obs["wall_dist"] = np.array([wall_dist], dtype=np.float64) / self.room_scale
+        obs["doorway_dist"] = self._get_doorway_distances(agent) / self.room_scale
         return obs
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
