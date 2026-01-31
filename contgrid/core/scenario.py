@@ -64,6 +64,8 @@ class BaseScenario(
         # reset agents
         world.agents = self.reset_agents(world, np_random)
 
+        self._post_reset_world(world, np_random)
+
     @abstractmethod
     def reset_agents(self, world: World, np_random: np.random.Generator) -> list[Agent]:
         pass
@@ -83,6 +85,9 @@ class BaseScenario(
         pass
 
     def _pre_reset_world(self, world: World, np_random: np.random.Generator) -> None:
+        pass
+
+    def _post_reset_world(self, world: World, np_random: np.random.Generator) -> None:
         pass
 
     def global_reward(self, world: World) -> float:

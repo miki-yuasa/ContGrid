@@ -429,6 +429,30 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         return world.landmarks
 
+    def _post_reset_world(self, world: World, np_random: Generator) -> None:
+        # Find the closest lava and hole to the agent after all entities have been placed
+        agent = world.agents[0]
+        min_lava_idx: int = (
+            int(np.argmin(np.linalg.norm(self.lava_pos - agent.state.pos, axis=1)))
+            if len(self.lava_pos) > 0
+            else -1
+        )
+        min_hole_idx: int = (
+            int(np.argmin(np.linalg.norm(self.hole_pos - agent.state.pos, axis=1)))
+            if len(self.hole_pos) > 0
+            else -1
+        )
+        self.closest_lava_pos: NDArray[np.float64] = (
+            self.lava_pos[min_lava_idx]
+            if len(self.lava_pos) > 0
+            else np.array([], dtype=np.float64)
+        )
+        self.closest_hole_pos: NDArray[np.float64] = (
+            self.hole_pos[min_hole_idx]
+            if len(self.hole_pos) > 0
+            else np.array([], dtype=np.float64)
+        )
+
     @classmethod
     def _choose_new_pos(
         cls, spawn_pos: SpawnPos, free_cells: list[CellPosition], np_random: Generator
@@ -617,6 +641,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         d_hl, _ = self.get_closest(agent.state.pos, self.hole_pos)
         d_gl = np.linalg.norm(agent.state.pos - self.goal_pos)
 
+        d_lava_closest = np.linalg.norm(agent.state.pos - self.closest_lava_pos)
+        d_hole_closest = np.linalg.norm(agent.state.pos - self.closest_hole_pos)
+
         doorway_distances = {
             name: np.linalg.norm(agent.state.pos - pos)
             for name, pos in self.doorways.items()
@@ -626,6 +653,8 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             "lava": d_lv,
             "hole": d_hl,
             "goal": d_gl,
+            "closest_lava": d_lava_closest,
+            "closest_hole": d_hole_closest,
         } | doorway_distances
 
         info_dict["is_success"] = bool(d_gl < self.goal_thr_dist)
