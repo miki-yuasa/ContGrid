@@ -178,18 +178,6 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         else:
             raise ValueError(f"Unknown spawn method config: {type(method_config)}")
 
-    def reset_world(self, world: World, np_random: np.random.Generator) -> None:
-        """Reset world with agents first, then landmarks.
-
-        This override ensures agents are positioned before obstacles are spawned,
-        so that obstacle spawning can avoid overlapping with the agent.
-        """
-        self._pre_reset_world(world, np_random)
-        # Reset agents FIRST so their positions are known
-        world.agents = self.reset_agents(world, np_random)
-        # Then reset landmarks, which can use agent positions to avoid overlaps
-        world.landmarks = self.reset_landmarks(world, np_random)
-
     def init_agents(self, world: World, np_random=None) -> list[Agent]:
         assert self.config
         agent = Agent(
