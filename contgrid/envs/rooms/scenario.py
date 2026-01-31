@@ -521,7 +521,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
         wall_limits = world.grid.wall_limits
-        low_bound = -np.array((wall_limits.max_x, wall_limits.max_y))
+        low_bound = np.array((wall_limits.min_x, wall_limits.min_y))
         high_bound = np.array((wall_limits.max_x, wall_limits.max_y))
         num_lavas = len(self.lavas)
         num_holes = len(self.holes)
