@@ -648,6 +648,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         wall_limits = world.grid.wall_limits
         low_bound = np.array((wall_limits.min_x, wall_limits.min_y))
         high_bound = np.array((wall_limits.max_x, wall_limits.max_y))
+        if self.room_scale is not None:
+            low_bound = np.array((-1.0, -1.0))
+            high_bound = np.array((1.0, 1.0))
         num_lavas = len(self.lavas)
         num_holes = len(self.holes)
         max_dist = float(np.linalg.norm(high_bound - low_bound))
