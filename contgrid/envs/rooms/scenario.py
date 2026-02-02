@@ -112,8 +112,9 @@ class SpawnConfig(BaseModel):
 class ObservationConfig(BaseModel):
     """Configuration for observations in the Rooms scenario."""
 
-    lava_dist: Literal["closest", "all"] = "closest"
-    hole_dist: Literal["closest", "all"] = "closest"
+    obs_dist: Literal["closest", "all", "none"] = "closest"
+    goal_dist: Literal["all", "none"] = "all"
+    doorway_dist: Literal["all", "none"] = "all"
 
 
 class RoomsScenarioConfig(BaseModel):
@@ -122,6 +123,131 @@ class RoomsScenarioConfig(BaseModel):
     spawn_config: SpawnConfig = SpawnConfig()
     reward_config: RewardConfig = RewardConfig(step_penalty=0.01)
     observation_config: ObservationConfig = ObservationConfig()
+
+
+class GoalDistObsFactory:
+    def __init__(self, room_scale: float, dist_mode: Literal["all", "none"]):
+        self.room_scale = room_scale
+        self.dist_mode = dist_mode
+
+    def obs_space_dict(self, max_dist: float) -> dict[str, spaces.Space]:
+        if self.dist_mode == "all":
+            return {
+                "goal_dist": spaces.Box(
+                    low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                )
+            }
+        else:
+            return {}
+
+    def observation(
+        self, agent: Agent, goal_pos: NDArray[np.float64]
+    ) -> dict[str, NDArray[np.float64]]:
+        if self.dist_mode == "all":
+            goal_dist = np.linalg.norm(agent.state.pos - goal_pos)
+            return {
+                "goal_dist": np.array([goal_dist], dtype=np.float64) / self.room_scale
+            }
+        else:
+            return {}
+
+
+class DoorwayDistObsFactory:
+    def __init__(
+        self,
+        room_scale: float,
+        dist_mode: Literal["all", "none"],
+        name: str = "doorway_dist",
+    ):
+        self.name: str = name
+        self.room_scale: float = room_scale
+        self.dist_mode: Literal["all", "none"] = dist_mode
+
+    def obs_space_dict(
+        self, num_doorways: int, max_dist: float
+    ) -> dict[str, spaces.Space]:
+        match self.dist_mode:
+            case "none":
+                return {}
+            case "all":
+                return {
+                    self.name: spaces.Box(
+                        low=0.0,
+                        high=max_dist,
+                        shape=(num_doorways,),
+                        dtype=np.float64,
+                    )
+                }
+            case _:
+                raise ValueError(f"Unknown dist_mode: {self.dist_mode}")
+
+    def observation(
+        self, agent: Agent, doorway_pos: NDArray[np.float64]
+    ) -> dict[str, NDArray[np.float64]]:
+        match self.dist_mode:
+            case "all":
+                dists = np.linalg.norm(doorway_pos - agent.state.pos, axis=1)
+                return {self.name: dists.astype(np.float64) / self.room_scale}
+            case "none":
+                return {}
+            case _:
+                raise ValueError(f"Unknown dist_mode: {self.dist_mode}")
+
+
+class ObstacleDistObsFactory:
+    def __init__(
+        self,
+        room_scale: float,
+        dist_mode: Literal["closest", "all", "none"],
+        name: str = "obstacle_dist",
+    ):
+        self.name: str = name
+        self.room_scale: float = room_scale
+        self.dist_mode: Literal["closest", "all", "none"] = dist_mode
+
+    def obs_space_dict(
+        self, num_obstacles: int, max_dist: float
+    ) -> dict[str, spaces.Space]:
+        match self.dist_mode:
+            case "none":
+                return {}
+            case "all":
+                return {
+                    self.name: spaces.Box(
+                        low=0.0,
+                        high=max_dist,
+                        shape=(num_obstacles,),
+                        dtype=np.float64,
+                    )
+                }
+            case "closest":
+                return {
+                    self.name: spaces.Box(
+                        low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                    )
+                }
+            case _:
+                raise ValueError(f"Unknown dist_mode: {self.dist_mode}")
+
+    def observation(
+        self, agent: Agent, obstacle_pos: NDArray[np.float64]
+    ) -> dict[str, NDArray[np.float64]]:
+        match self.dist_mode:
+            case "all":
+                dists = np.linalg.norm(obstacle_pos - agent.state.pos, axis=1)
+                return {self.name: dists.astype(np.float64) / self.room_scale}
+            case "closest":
+                if len(obstacle_pos) == 0:
+                    return {self.name: np.array([np.inf], dtype=np.float64)}
+                dists = np.linalg.norm(obstacle_pos - agent.state.pos, axis=1)
+                min_dist = np.min(dists)
+                return {
+                    self.name: np.array([min_dist], dtype=np.float64) / self.room_scale
+                }
+            case "none":
+                return {}
+            case _:
+                raise ValueError(f"Unknown dist_mode: {self.dist_mode}")
 
 
 class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float64]]]):
@@ -162,6 +288,25 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         self.room_scale: float = max(
             self.world_config.grid.width, self.world_config.grid.height
+        )
+
+        self.goal_dist_obs_factory = GoalDistObsFactory(
+            room_scale=self.room_scale,
+            dist_mode=config.observation_config.goal_dist,
+        )
+        self.doorway_dist_obs_factory = DoorwayDistObsFactory(
+            room_scale=self.room_scale,
+            dist_mode=config.observation_config.doorway_dist,
+        )
+        self.lava_dist_obs_factory = ObstacleDistObsFactory(
+            room_scale=self.room_scale,
+            dist_mode=config.observation_config.obs_dist,
+            name="lava_dist",
+        )
+        self.hole_dist_obs_factory = ObstacleDistObsFactory(
+            room_scale=self.room_scale,
+            dist_mode=config.observation_config.obs_dist,
+            name="hole_dist",
         )
 
     def _create_spawn_strategy(self) -> SpawnStrategy:
@@ -491,32 +636,12 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["doorway_pos"] = (
             self.doorway_pos.copy() - agent.state.pos.copy()
         ) / self.room_scale
-        obs["goal_dist"] = (
-            np.array([np.linalg.norm(agent.state.pos - self.goal_pos)])
-            / self.room_scale
-        )
-        assert self.config
-        if self.config.observation_config.lava_dist == "all":
-            lava_dists = (
-                np.linalg.norm(self.lava_pos - agent.state.pos, axis=1)
-                / self.room_scale
-            )
-            obs["lava_dist"] = lava_dists.astype(np.float64)
-        else:
-            lava_dist, _ = self.get_closest(agent.state.pos, self.lava_pos)
-            obs["lava_dist"] = np.array([lava_dist], dtype=np.float64) / self.room_scale
-        if self.config.observation_config.hole_dist == "all":
-            hole_dists = (
-                np.linalg.norm(self.hole_pos - agent.state.pos, axis=1)
-                / self.room_scale
-            )
-            obs["hole_dist"] = hole_dists.astype(np.float64)
-        else:
-            hole_dist, _ = self.get_closest(agent.state.pos, self.hole_pos)
-            obs["hole_dist"] = np.array([hole_dist], dtype=np.float64) / self.room_scale
         wall_dist, _ = self.get_closest(agent.state.pos, self.wall_pos)
         obs["wall_dist"] = np.array([wall_dist], dtype=np.float64) / self.room_scale
-        obs["doorway_dist"] = self._get_doorway_distances(agent) / self.room_scale
+        obs |= self.goal_dist_obs_factory.observation(agent, self.goal_pos)
+        obs |= self.lava_dist_obs_factory.observation(agent, self.lava_pos)
+        obs |= self.hole_dist_obs_factory.observation(agent, self.hole_pos)
+        obs |= self.doorway_dist_obs_factory.observation(agent, self.doorway_pos)
         return obs
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
@@ -525,75 +650,53 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         high_bound = np.array((wall_limits.max_x, wall_limits.max_y))
         num_lavas = len(self.lavas)
         num_holes = len(self.holes)
-        max_dist = np.linalg.norm(high_bound - low_bound)
+        max_dist = float(np.linalg.norm(high_bound - low_bound))
 
-        assert self.config
-        lava_dist_shape = (
-            (1,)
-            if self.config.observation_config.lava_dist == "closest"
-            else (num_lavas,)
+        obs_space_dict: dict[str, spaces.Space] = {
+            "agent_pos": spaces.Box(
+                low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
+            ),
+            "goal_pos": spaces.Box(
+                low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
+            ),
+            "lava_pos": spaces.Box(
+                low=np.stack([low_bound] * num_lavas)
+                if num_lavas > 0
+                else np.array([], dtype=np.float64),
+                high=np.stack([high_bound] * num_lavas)
+                if num_lavas > 0
+                else np.array([], dtype=np.float64),
+                dtype=np.float64,
+            ),
+            "hole_pos": spaces.Box(
+                low=np.stack([low_bound] * num_holes)
+                if num_holes > 0
+                else np.array([], dtype=np.float64),
+                high=np.stack([high_bound] * num_holes)
+                if num_holes > 0
+                else np.array([], dtype=np.float64),
+                dtype=np.float64,
+            ),
+            "doorway_pos": spaces.Box(
+                low=np.array([low_bound] * len(self.doorways))
+                if len(self.doorways) > 0
+                else np.array([], dtype=np.float64),
+                high=np.array([high_bound] * len(self.doorways))
+                if len(self.doorways) > 0
+                else np.array([], dtype=np.float64),
+                dtype=np.float64,
+            ),
+            "wall_dist": spaces.Box(
+                low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+            ),
+        }
+        obs_space_dict |= self.goal_dist_obs_factory.obs_space_dict(max_dist)
+        obs_space_dict |= self.lava_dist_obs_factory.obs_space_dict(num_lavas, max_dist)
+        obs_space_dict |= self.hole_dist_obs_factory.obs_space_dict(num_holes, max_dist)
+        obs_space_dict |= self.doorway_dist_obs_factory.obs_space_dict(
+            len(self.doorways), max_dist
         )
-        hole_dist_shape = (
-            (1,)
-            if self.config.observation_config.hole_dist == "closest"
-            else (num_holes,)
-        )
-
-        return spaces.Dict(
-            {
-                "agent_pos": spaces.Box(
-                    low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
-                ),
-                "goal_pos": spaces.Box(
-                    low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
-                ),
-                "lava_pos": spaces.Box(
-                    low=np.stack([low_bound] * num_lavas)
-                    if num_lavas > 0
-                    else np.array([], dtype=np.float64),
-                    high=np.stack([high_bound] * num_lavas)
-                    if num_lavas > 0
-                    else np.array([], dtype=np.float64),
-                    dtype=np.float64,
-                ),
-                "hole_pos": spaces.Box(
-                    low=np.stack([low_bound] * num_holes)
-                    if num_holes > 0
-                    else np.array([], dtype=np.float64),
-                    high=np.stack([high_bound] * num_holes)
-                    if num_holes > 0
-                    else np.array([], dtype=np.float64),
-                    dtype=np.float64,
-                ),
-                "doorway_pos": spaces.Box(
-                    low=np.array([low_bound] * len(self.doorways))
-                    if len(self.doorways) > 0
-                    else np.array([], dtype=np.float64),
-                    high=np.array([high_bound] * len(self.doorways))
-                    if len(self.doorways) > 0
-                    else np.array([], dtype=np.float64),
-                    dtype=np.float64,
-                ),
-                "goal_dist": spaces.Box(
-                    low=0.0, high=max_dist, shape=(1,), dtype=np.float64
-                ),
-                "lava_dist": spaces.Box(
-                    low=0.0, high=max_dist, shape=lava_dist_shape, dtype=np.float64
-                ),
-                "hole_dist": spaces.Box(
-                    low=0.0, high=max_dist, shape=hole_dist_shape, dtype=np.float64
-                ),
-                "wall_dist": spaces.Box(
-                    low=0.0, high=max_dist, shape=(1,), dtype=np.float64
-                ),
-                "doorway_dist": spaces.Box(
-                    low=0.0,
-                    high=max_dist,
-                    shape=(len(self.doorways),),
-                    dtype=np.float64,
-                ),
-            }
-        )
+        return spaces.Dict(obs_space_dict)
 
     def reward(self, agent: Agent, world: World) -> float:
         lava_min_dist, lava_idx = self.get_closest(agent.state.pos, self.lava_pos)
