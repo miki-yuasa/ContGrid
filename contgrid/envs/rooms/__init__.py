@@ -1,18 +1,19 @@
 """Rooms environment - a continuous grid world with multiple rooms and doorways."""
 
+from .configs import (
+    ObjConfig,
+    ObservationConfig,
+    RewardConfig,
+    RoomsScenarioConfig,
+    SpawnConfig,
+)
 from .env import (
     DEFAULT_ROOMS_SCENARIO_CONFIG,
     DEFAULT_WORLD_CONFIG,
     RoomsEnv,
     RoomsEnvConfig,
 )
-from .scenario import (
-    ObjConfig,
-    RewardConfig,
-    RoomsScenario,
-    RoomsScenarioConfig,
-    SpawnConfig,
-)
+from .scenario import RoomsScenario
 from .spawn_strategies import (
     FixedSpawnConfig,
     FixedSpawnStrategy,
@@ -29,6 +30,7 @@ __all__ = [
     # Config classes
     "FixedSpawnConfig",
     "ObjConfig",
+    "ObservationConfig",
     "PathGaussianConfig",
     "RewardConfig",
     "RoomsScenarioConfig",
