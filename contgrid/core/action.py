@@ -438,7 +438,7 @@ class DiscreteAng(ActionMode[np.integer]):
             self._apply_sensitivity(agent, agent.accel)
 
     def action2xy_vel(self, action: np.integer, agent: Agent) -> tuple[float, float]:
-        if isinstance(action, np.ndarray):
+        if isinstance(action, np.ndarray) and action.ndim > 0:
             if action.size != 1:
                 raise ValueError(
                     f"Action array size is not 1: {action.size}. Cannot extract single direction index."
