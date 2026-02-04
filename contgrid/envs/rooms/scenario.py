@@ -197,6 +197,19 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             case _:
                 raise ValueError("Invalid spawn_pos type")
 
+    def reset_world(self, world: World, np_random: Generator) -> None:
+        """Reset the world, ensuring agents are reset before landmarks.
+
+        This override is necessary because obstacle spawning strategies need
+        to know the agent's position to avoid overlapping spawns.
+        """
+        self._pre_reset_world(world, np_random)
+        # Reset agents FIRST so landmarks can use agent position for spawn validation
+        world.agents = self.reset_agents(world, np_random)
+        # Reset landmarks (obstacles) using agent position
+        world.landmarks = self.reset_landmarks(world, np_random)
+        self._post_reset_world(world, np_random)
+
     def _pre_reset_world(self, world: World, np_random: Generator) -> None:
         """Pre-reset initialization: prepare free_cells list and remove fixed obstacle positions."""
         assert self.config
@@ -364,12 +377,45 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             )
             positions.extend(additional_positions)
 
-        # Update obstacle positions
+        # Update obstacle positions with safety check for agent distance
+        obstacle_radius = (
+            self.config.spawn_config.lava_size
+            if obstacle_type == "lava"
+            else self.config.spawn_config.hole_size
+        )
+        agent_radius = self.config.spawn_config.agent_size
+        min_agent_distance = obstacle_radius + agent_radius
+
+        valid_positions: list[Position] = []
         for i, pos in enumerate(positions):
             if i < len(obstacles):
-                obstacles[i].state.pos = np.array(pos, dtype=np.float64)
+                pos_array = np.array(pos, dtype=np.float64)
+                position_is_valid = True
 
-        return positions
+                # Verify distance from agent and re-spawn if too close
+                if agent_pos is not None:
+                    dist = np.linalg.norm(pos_array - agent_pos)
+                    if dist < min_agent_distance:
+                        # Find a position that's far enough from agent
+                        found_valid_cell = False
+                        for cell in self.free_cells:
+                            cell_dist = np.linalg.norm(np.array(cell) - agent_pos)
+                            if cell_dist >= min_agent_distance:
+                                pos_array = np.array(cell, dtype=np.float64)
+                                if cell in self.free_cells:
+                                    self.free_cells.remove(cell)
+                                found_valid_cell = True
+                                break
+
+                        if not found_valid_cell:
+                            # Could not find a valid position - skip this obstacle
+                            position_is_valid = False
+
+                if position_is_valid:
+                    obstacles[i].state.pos = pos_array
+                    valid_positions.append(tuple(pos_array))
+
+        return valid_positions
 
     def _post_reset_world(self, world: World, np_random: Generator) -> None:
         """Post-reset: find and cache closest obstacles to the agent."""
