@@ -438,7 +438,14 @@ class DiscreteAng(ActionMode[np.integer]):
             self._apply_sensitivity(agent, agent.accel)
 
     def action2xy_vel(self, action: np.integer, agent: Agent) -> tuple[float, float]:
-        direction_idx = int(action)
+        if isinstance(action, np.ndarray):
+            if action.size != 1:
+                raise ValueError(
+                    f"Action array size is not 1: {action.size}. Cannot extract single direction index."
+                )
+            direction_idx = int(action[0])
+        else:
+            direction_idx = int(action)
 
         angle = (direction_idx / self.num_directions) * 2 * np.pi
         magnitude = agent.u_range
