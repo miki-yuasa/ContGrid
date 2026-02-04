@@ -641,6 +641,7 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
             else scenario.config.spawn_config.hole_size
         )
         agent_radius = scenario.config.spawn_config.agent_size
+        min_agent_distance = obstacle_radius + agent_radius
 
         # Check if position is in the required room
         if required_room is not None:
@@ -678,9 +679,9 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         if np.linalg.norm(pos - scenario.goal_pos) < scenario.goal_thr_dist + 0.5:
             return False
 
-        # Check not overlapping with agent
+        # Check not overlapping with agent (use proper size-based distance)
         if agent_pos is not None:
-            if np.linalg.norm(pos - agent_pos) < self.config.min_spacing:
+            if np.linalg.norm(pos - agent_pos) < min_agent_distance:
                 return False
 
         return True
