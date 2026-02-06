@@ -479,12 +479,19 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["goal_pos"] = (
             self.goal_pos.copy() - agent.state.pos.copy()
         ) / self.room_scale
-        obs["lava_pos"] = (
-            self.lava_pos.copy() - agent.state.pos.copy()
-        ) / self.room_scale
-        obs["hole_pos"] = (
-            self.hole_pos.copy() - agent.state.pos.copy()
-        ) / self.room_scale
+        lava_pos = (self.lava_pos.copy() - agent.state.pos.copy()) / self.room_scale
+        # Sort the positions by distance to the agent so that obs is consistent even if lava positions change
+        if len(lava_pos) > 0:
+            lava_distances = np.linalg.norm(lava_pos, axis=1)
+            sorted_indices = np.argsort(lava_distances)
+            lava_pos = lava_pos[sorted_indices]
+        obs["lava_pos"] = lava_pos
+        hole_pos = (self.hole_pos.copy() - agent.state.pos.copy()) / self.room_scale
+        if len(hole_pos) > 0:
+            hole_distances = np.linalg.norm(hole_pos, axis=1)
+            sorted_indices = np.argsort(hole_distances)
+            obs["hole_pos"] = hole_pos[sorted_indices]
+        obs["hole_pos"] = hole_pos
         obs["doorway_pos"] = (
             self.doorway_pos.copy() - agent.state.pos.copy()
         ) / self.room_scale
