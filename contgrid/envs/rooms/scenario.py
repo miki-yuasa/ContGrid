@@ -475,7 +475,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
     def observation(self, agent: Agent, world: World) -> dict[str, NDArray[np.float64]]:
         obs = {}
+        self.room_scale = 1
         obs["agent_pos"] = agent.state.pos.copy() / self.room_scale
+        obs["agent_vel"] = agent.state.vel.copy() / self.room_scale
         obs["goal_pos"] = (
             self.goal_pos.copy() - agent.state.pos.copy()
         ) / self.room_scale
@@ -520,6 +522,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs_space_dict: dict[str, spaces.Space] = {
             "agent_pos": spaces.Box(
                 low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
+            ),
+            "agent_vel": spaces.Box(
+                low=-max_dist, high=max_dist, shape=(2,), dtype=np.float64
             ),
             "goal_pos": spaces.Box(
                 low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
