@@ -75,9 +75,10 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         self.spawn_strategy = self._create_spawn_strategy()
 
-        self.room_scale: float = max(
-            self.world_config.grid.width, self.world_config.grid.height
-        )
+        # self.room_scale: float = max(
+        #     self.world_config.grid.width, self.world_config.grid.height
+        # )
+        self.room_scale: float = 1.0
 
         self.goal_dist_obs_factory = GoalDistObsFactory(
             room_scale=self.room_scale,
@@ -475,7 +476,6 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
     def observation(self, agent: Agent, world: World) -> dict[str, NDArray[np.float64]]:
         obs = {}
-        self.room_scale = 1
         obs["agent_pos"] = agent.state.pos.copy() / self.room_scale
         obs["agent_vel"] = agent.state.vel.copy() / self.room_scale
         obs["goal_pos"] = (
@@ -512,9 +512,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         wall_limits = world.grid.wall_limits
         low_bound = np.array((wall_limits.min_x, wall_limits.min_y))
         high_bound = np.array((wall_limits.max_x, wall_limits.max_y))
-        if self.room_scale != 1:
-            low_bound = np.array((-1.0, -1.0))
-            high_bound = np.array((1.0, 1.0))
+        # if self.room_scale != 1:
+        #     low_bound = np.array((-1.0, -1.0))
+        #     high_bound = np.array((1.0, 1.0))
         num_lavas = len(self.lavas)
         num_holes = len(self.holes)
         max_dist = float(np.linalg.norm(high_bound - low_bound))
