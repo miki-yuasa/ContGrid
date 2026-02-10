@@ -512,6 +512,8 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         wall_limits = world.grid.wall_limits
         low_bound = np.array((wall_limits.min_x, wall_limits.min_y))
         high_bound = np.array((wall_limits.max_x, wall_limits.max_y))
+        rel_low_bound = low_bound - high_bound
+        rel_high_bound = high_bound - low_bound
         # if self.room_scale != 1:
         #     low_bound = np.array((-1.0, -1.0))
         #     high_bound = np.array((1.0, 1.0))
@@ -527,19 +529,19 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 low=-max_dist, high=max_dist, shape=(2,), dtype=np.float64
             ),
             "goal_pos": spaces.Box(
-                low=low_bound, high=high_bound, shape=(2,), dtype=np.float64
+                low=rel_low_bound, high=rel_high_bound, shape=(2,), dtype=np.float64
             ),
             "lava_pos": spaces.Box(
-                low=np.stack([low_bound] * num_lavas)
+                low=np.stack([rel_low_bound] * num_lavas)
                 if num_lavas > 0
                 else np.array([], dtype=np.float64),
-                high=np.stack([high_bound] * num_lavas)
+                high=np.stack([rel_high_bound] * num_lavas)
                 if num_lavas > 0
                 else np.array([], dtype=np.float64),
                 dtype=np.float64,
             ),
             "hole_pos": spaces.Box(
-                low=np.stack([low_bound] * num_holes)
+                low=np.stack([rel_low_bound] * num_holes)
                 if num_holes > 0
                 else np.array([], dtype=np.float64),
                 high=np.stack([high_bound] * num_holes)
@@ -548,10 +550,10 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 dtype=np.float64,
             ),
             "doorway_pos": spaces.Box(
-                low=np.array([low_bound] * len(self.doorways))
+                low=np.array([rel_low_bound] * len(self.doorways))
                 if len(self.doorways) > 0
                 else np.array([], dtype=np.float64),
-                high=np.array([high_bound] * len(self.doorways))
+                high=np.array([rel_high_bound] * len(self.doorways))
                 if len(self.doorways) > 0
                 else np.array([], dtype=np.float64),
                 dtype=np.float64,
