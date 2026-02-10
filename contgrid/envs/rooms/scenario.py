@@ -492,7 +492,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         if len(hole_pos) > 0:
             hole_distances = np.linalg.norm(hole_pos, axis=1)
             sorted_indices = np.argsort(hole_distances)
-            obs["hole_pos"] = hole_pos[sorted_indices]
+            hole_pos = hole_pos[sorted_indices]
         obs["hole_pos"] = hole_pos
         obs["doorway_pos"] = (
             self.doorway_pos.copy() - agent.state.pos.copy()
