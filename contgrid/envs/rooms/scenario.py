@@ -746,7 +746,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         n_actions = self.action_space_ref.n
 
         wall_dists = self._get_wall_distances(agent.state.pos, wall_positions)
-        collision_threshold = self.config.spawn_config.agent_size
+        collision_threshold = self.config.spawn_config.agent_size / 2
 
         # Check which cardinal directions are blocked
         blocked_directions = {
