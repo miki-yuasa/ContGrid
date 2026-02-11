@@ -136,6 +136,9 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
                 agent, self.world
             )
 
+        # Set action space on scenario if it has the method (for prohibited_actions calculation)
+        scenario.set_action_space(self.action_spaces[self.world.agents[0].name])
+
         # self.state_space = spaces.Box(
         #     low=-np.float32(np.inf),
         #     high=+np.float32(np.inf),

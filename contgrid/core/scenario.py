@@ -21,6 +21,15 @@ class BaseScenario(
     ) -> None:
         self.config = config
         self.world_config = world_config
+        self.action_space_ref: spaces.Space | None = None
+
+    def set_action_space(self, action_space: spaces.Space) -> None:
+        """Set the action space reference for this scenario.
+
+        Should be called by the environment after initialization to enable
+        action-space-dependent features (e.g., prohibited_actions).
+        """
+        self.action_space_ref = action_space
 
     def make_world(
         self,

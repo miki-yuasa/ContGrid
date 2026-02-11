@@ -497,8 +497,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         obs["doorway_pos"] = (
             self.doorway_pos.copy() - agent.state.pos.copy()
         ) / self.room_scale
-        wall_dist, _ = self.get_closest(agent.state.pos, self.wall_pos)
-        obs["wall_dist"] = np.array([wall_dist], dtype=np.float64) / self.room_scale
+        # Calculate wall distances in four cardinal directions: top, right, bottom, left
+        wall_dists = self._get_wall_distances(agent.state.pos, self.wall_pos)
+        obs["wall_dist"] = wall_dists
         obs |= self.goal_dist_obs_factory.observation(agent, self.goal_pos)
         obs |= self.lava_dist_obs_factory.observation(agent, self.lava_pos)
         obs |= self.hole_dist_obs_factory.observation(agent, self.hole_pos)
@@ -559,7 +560,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 dtype=np.float64,
             ),
             "wall_dist": spaces.Box(
-                low=0.0, high=max_dist, shape=(1,), dtype=np.float64
+                low=0.0, high=max_dist, shape=(4,), dtype=np.float64
             ),
         }
         obs_space_dict |= self.goal_dist_obs_factory.obs_space_dict(max_dist)
@@ -636,6 +637,9 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             "lava": self.lava_thr_dist,
             "hole": self.hole_thr_dist,
         }
+        info_dict["prohibited_actions"] = self._get_prohibited_actions(
+            agent, self.wall_pos
+        )
 
         return info_dict
 
@@ -644,3 +648,113 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             [np.linalg.norm(agent.state.pos - pos) for pos in self.doorways.values()],
             dtype=np.float64,
         )
+
+    def _get_wall_distances(
+        self, agent_pos: NDArray[np.float64], wall_positions: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        """Calculate distances to walls in four cardinal directions.
+
+        Returns distances to closest wall in: top, right, bottom, left directions.
+        """
+        if len(wall_positions) == 0:
+            return (
+                np.array([np.inf, np.inf, np.inf, np.inf], dtype=np.float64)
+                / self.room_scale
+            )
+
+        agent_x, agent_y = agent_pos[0], agent_pos[1]
+        wall_x = wall_positions[:, 0]
+        wall_y = wall_positions[:, 1]
+
+        # Top: walls with y > agent_y, distance = wall_y - agent_y
+        top_walls = wall_y > agent_y
+        top_dist = (
+            np.inf if not np.any(top_walls) else np.min(wall_y[top_walls] - agent_y)
+        )
+
+        # Right: walls with x > agent_x, distance = wall_x - agent_x
+        right_walls = wall_x > agent_x
+        right_dist = (
+            np.inf if not np.any(right_walls) else np.min(wall_x[right_walls] - agent_x)
+        )
+
+        # Bottom: walls with y < agent_y, distance = agent_y - wall_y
+        bottom_walls = wall_y < agent_y
+        bottom_dist = (
+            np.inf
+            if not np.any(bottom_walls)
+            else np.min(agent_y - wall_y[bottom_walls])
+        )
+
+        # Left: walls with x < agent_x, distance = agent_x - wall_x
+        left_walls = wall_x < agent_x
+        left_dist = (
+            np.inf if not np.any(left_walls) else np.min(agent_x - wall_x[left_walls])
+        )
+
+        wall_dists = np.array(
+            [top_dist, right_dist, bottom_dist, left_dist], dtype=np.float64
+        )
+        return wall_dists / self.room_scale
+
+    def _get_prohibited_actions(
+        self, agent: Agent, wall_positions: NDArray[np.float64]
+    ) -> list[int]:
+        """Determine which actions are prohibited due to wall proximity.
+
+        Returns a list of action indices that would cause collision with walls.
+        For discrete action spaces with n actions (where n is divisible by 4),
+        assumes actions are arranged in a circular pattern starting from top (0)
+        going clockwise. For continuous action spaces, returns empty list.
+
+        Action mapping for n actions (n % 4 == 0):
+        - Top: index 0
+        - Right: index n//4
+        - Bottom: index n//2
+        - Left: index 3*n//4
+
+        Examples:
+        - 4 actions: [0=top, 1=right, 2=bottom, 3=left]
+        - 8 actions: [0=top, 2=right, 4=bottom, 6=left]
+        - 16 actions: [0=top, 4=right, 8=bottom, 12=left]
+        """
+        assert self.config
+
+        # Return empty list if no action space set or if continuous
+        if self.action_space_ref is None or not isinstance(
+            self.action_space_ref, spaces.Discrete
+        ):
+            return []
+
+        n_actions = self.action_space_ref.n
+
+        wall_dists = self._get_wall_distances(agent.state.pos, wall_positions)
+        collision_threshold = self.config.spawn_config.agent_size
+
+        # Check which cardinal directions are blocked
+        blocked_directions = {
+            "top": wall_dists[0] < collision_threshold,
+            "right": wall_dists[1] < collision_threshold,
+            "bottom": wall_dists[2] < collision_threshold,
+            "left": wall_dists[3] < collision_threshold,
+        }
+
+        prohibited = []
+
+        # Map cardinal directions to action indices based on action space size
+        # Assumes actions are arranged in a circular pattern starting from top (0) going clockwise
+        # Pattern: top=0, right=n/4, bottom=n/2, left=3n/4
+        if n_actions >= 4 and n_actions % 4 == 0:
+            action_indices = {
+                "top": 0,
+                "right": n_actions // 4,
+                "bottom": n_actions // 2,
+                "left": (3 * n_actions) // 4,
+            }
+
+            for direction, is_blocked in blocked_directions.items():
+                if is_blocked:
+                    prohibited.append(action_indices[direction])
+        # For action spaces not divisible by 4, return empty list as mapping is unclear
+
+        return prohibited
