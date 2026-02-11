@@ -275,6 +275,8 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         self.wall_pos = np.array(
             world.wall_collision_checker.wall_centers, dtype=np.float64
         )
+        self.wall_bounds = world.wall_collision_checker.wall_bounds
+        self.cell_size = world.grid.cell_size
 
         return world.landmarks
 
@@ -652,44 +654,59 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
     def _get_wall_distances(
         self, agent_pos: NDArray[np.float64], wall_positions: NDArray[np.float64]
     ) -> NDArray[np.float64]:
-        """Calculate distances to walls in four cardinal directions.
+        """Calculate distances to the nearest wall in four cardinal directions.
 
-        Returns distances to closest wall in: top, right, bottom, left directions.
+        Only considers walls that are actually in the agent's path (i.e., whose
+        perpendicular extent overlaps with the agent's position). This correctly
+        handles internal walls in multi-room layouts by ignoring walls in other
+        rooms that happen to be in the same cardinal direction but aren't blocking.
+
+        Returns distances in order: [top, right, bottom, left].
         """
-        if len(wall_positions) == 0:
+        if len(self.wall_bounds) == 0:
             return (
                 np.array([np.inf, np.inf, np.inf, np.inf], dtype=np.float64)
                 / self.room_scale
             )
 
         agent_x, agent_y = agent_pos[0], agent_pos[1]
-        wall_x = wall_positions[:, 0]
-        wall_y = wall_positions[:, 1]
+        # wall_bounds columns: [min_x, max_x, min_y, max_y]
+        w_min_x = self.wall_bounds[:, 0]
+        w_max_x = self.wall_bounds[:, 1]
+        w_min_y = self.wall_bounds[:, 2]
+        w_max_y = self.wall_bounds[:, 3]
 
-        # Top: walls with y > agent_y, distance = wall_y - agent_y
-        top_walls = wall_y > agent_y
+        # Walls aligned horizontally with the agent (agent's x is within wall's x-extent)
+        x_aligned = (w_min_x <= agent_x) & (agent_x <= w_max_x)
+        # Walls aligned vertically with the agent (agent's y is within wall's y-extent)
+        y_aligned = (w_min_y <= agent_y) & (agent_y <= w_max_y)
+
+        # Top: x-aligned walls whose bottom edge is above the agent
+        top_mask = x_aligned & (w_min_y > agent_y)
         top_dist = (
-            np.inf if not np.any(top_walls) else np.min(wall_y[top_walls] - agent_y)
+            float(np.min(w_min_y[top_mask] - agent_y)) if np.any(top_mask) else np.inf
         )
 
-        # Right: walls with x > agent_x, distance = wall_x - agent_x
-        right_walls = wall_x > agent_x
-        right_dist = (
-            np.inf if not np.any(right_walls) else np.min(wall_x[right_walls] - agent_x)
-        )
-
-        # Bottom: walls with y < agent_y, distance = agent_y - wall_y
-        bottom_walls = wall_y < agent_y
+        # Bottom: x-aligned walls whose top edge is below the agent
+        bottom_mask = x_aligned & (w_max_y < agent_y)
         bottom_dist = (
-            np.inf
-            if not np.any(bottom_walls)
-            else np.min(agent_y - wall_y[bottom_walls])
+            float(np.min(agent_y - w_max_y[bottom_mask]))
+            if np.any(bottom_mask)
+            else np.inf
         )
 
-        # Left: walls with x < agent_x, distance = agent_x - wall_x
-        left_walls = wall_x < agent_x
+        # Right: y-aligned walls whose left edge is to the right of agent
+        right_mask = y_aligned & (w_min_x > agent_x)
+        right_dist = (
+            float(np.min(w_min_x[right_mask] - agent_x))
+            if np.any(right_mask)
+            else np.inf
+        )
+
+        # Left: y-aligned walls whose right edge is to the left of agent
+        left_mask = y_aligned & (w_max_x < agent_x)
         left_dist = (
-            np.inf if not np.any(left_walls) else np.min(agent_x - wall_x[left_walls])
+            float(np.min(agent_x - w_max_x[left_mask])) if np.any(left_mask) else np.inf
         )
 
         wall_dists = np.array(
