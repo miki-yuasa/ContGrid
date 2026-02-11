@@ -763,10 +763,10 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
         # Pattern: top=0, right=n/4, bottom=n/2, left=3n/4
         if n_actions >= 4 and n_actions % 4 == 0:
             action_indices = {
-                "top": 0,
-                "right": n_actions // 4,
-                "bottom": n_actions // 2,
-                "left": (3 * n_actions) // 4,
+                "right": 0,
+                "top": n_actions // 4,
+                "left": n_actions // 2,
+                "bottom": (3 * n_actions) // 4,
             }
 
             for direction, is_blocked in blocked_directions.items():
