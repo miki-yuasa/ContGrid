@@ -15,6 +15,7 @@ from contgrid.core.action import (
     DEFAULT_ACTION_CONFIG,
     ActionMode,
     ActionModeConfig,
+    ContinuousAng,
     ContinuousFullVelocity,
     ContinuousMinimalVelocity,
     DiscreteAng,
@@ -66,6 +67,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         DiscreteDirectionVelocity.name: DiscreteDirectionVelocity,
         DiscreteAngDirectional.name: DiscreteAngDirectional,
         DiscreteAng.name: DiscreteAng,
+        ContinuousAng.name: ContinuousAng,
     }
 
     def __init__(

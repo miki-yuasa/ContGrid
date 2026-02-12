@@ -401,7 +401,7 @@ class DiscreteAngDirectional(ActionMode[NDArray[np.integer]]):
 
 class DiscreteAng(ActionMode[np.integer]):
     """
-    Discrete action for angle direction (0 to num_directions-1) and discrete action for velocity magnitude (0 to u_range) with num_vel_discrete bins,
+    Discrete action for angle direction (0 to num_directions-1) and constant velocity magnitude (e.g., 1.0),
     and communication (i.e., 1 dimension).
     """
 
@@ -515,3 +515,55 @@ class DiscreteAng(ActionMode[np.integer]):
         dir_sum = np.mod(dir_sum, self.num_directions)
 
         return dir_sum.astype(np.integer)
+
+
+class ContinuousAng(ActionMode[NDArray[np.float64]]):
+    """
+    Continuous action for angle direction (0 to 2*pi) and constant velocity magnitude (e.g., 1.0). No communication dimension.
+    """
+
+    name: str = "continuous_ang"
+
+    def define_action_space(self, agent: Agent) -> Space[NDArray[np.float64]]:
+        low_bound: list[float] = []
+        high_bound: list[float] = []
+        if agent.movable:
+            low_bound += [0.0]  # angle
+            high_bound += [2 * np.pi]  # angle
+        if not agent.silent:
+            raise NotImplementedError(
+                "Communication not implemented for ContinuousAng action mode."
+            )
+        return Box(
+            low=np.array(low_bound, dtype=np.float64),
+            high=np.array(high_bound, dtype=np.float64),
+            dtype=np.float64,
+        )
+
+    def update_agent_action(
+        self, agent: Agent, action: NDArray[np.float64], world: World
+    ) -> None:
+        self._zero_agent_actions(agent, world)
+
+        if agent.movable:
+            x_vel, y_vel = self.action2xy_vel(action, agent)
+            agent.action.u[0] += x_vel
+            agent.action.u[1] += y_vel
+
+            self._apply_sensitivity(agent, agent.accel)
+
+    def action2xy_vel(
+        self, action: NDArray[np.float64], agent: Agent
+    ) -> tuple[float, float]:
+        if len(action) >= 1:
+            angle = float(action[0])
+            magnitude = agent.u_range
+
+            x_vel = magnitude * np.cos(angle)
+            y_vel = magnitude * np.sin(angle)
+
+            return x_vel, y_vel
+        else:
+            raise ValueError(
+                f"Action length is less than 1: {len(action)}. Cannot extract angle."
+            )
