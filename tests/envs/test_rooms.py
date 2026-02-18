@@ -81,6 +81,45 @@ class TestRoomsEnv:
 
         env.close()
 
+    def test_export_and_save_spawned_config(self, tmp_path):
+        """Export and save current random spawns as RoomsScenarioConfig."""
+        spawn_config = SpawnConfig(
+            agent=None,
+            goal=ObjConfig(pos=None, reward=1.0, absorbing=False),
+            lavas=[
+                ObjConfig(pos=None, reward=-1.0, absorbing=False),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False),
+            ],
+            holes=[
+                ObjConfig(pos=None, reward=-1.0, absorbing=False),
+                ObjConfig(pos=None, reward=-1.0, absorbing=False),
+            ],
+        )
+        env = RoomsEnv(scenario_config=RoomsScenarioConfig(spawn_config=spawn_config))
+        env.reset(seed=123)
+
+        exported = env.export_spawned_config()
+        assert isinstance(exported, RoomsScenarioConfig)
+
+        world_agent_pos = tuple(float(v) for v in env.world.agents[0].state.pos)
+        world_goal_pos = tuple(float(v) for v in env.scenario.goal.state.pos)
+        world_lava_pos = [tuple(float(v) for v in lava.state.pos) for lava in env.scenario.lavas]
+        world_hole_pos = [tuple(float(v) for v in hole.state.pos) for hole in env.scenario.holes]
+
+        assert exported.spawn_config.agent == world_agent_pos
+        assert exported.spawn_config.goal.pos == world_goal_pos
+        assert [obj.pos for obj in exported.spawn_config.lavas] == world_lava_pos
+        assert [obj.pos for obj in exported.spawn_config.holes] == world_hole_pos
+
+        output_path = tmp_path / "spawned_config.json"
+        saved = env.save_spawned_config(output_path)
+        assert output_path.exists()
+
+        loaded = RoomsScenarioConfig.model_validate_json(output_path.read_text())
+        assert loaded.model_dump() == saved.model_dump()
+
+        env.close()
+
     def test_observation_space(self):
         """Test observation space definition"""
         env = RoomsEnv()

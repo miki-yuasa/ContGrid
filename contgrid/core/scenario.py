@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from collections.abc import Mapping
+from typing import Any, Generic, Protocol, Self, TypeVar
 
 import numpy as np
 from gymnasium import spaces
@@ -8,15 +9,28 @@ from gymnasium.core import ObsType
 from .entities import Landmark
 from .world import DEFAULT_WORLD_CONFIG, Agent, World, WorldConfig
 
-ScenarioConfigT = TypeVar("ScenarioConfigT")
+
+class ScenarioConfigProtocol(Protocol):
+    """Protocol for scenario configuration types."""
+
+    def model_copy(
+        self, *, update: Mapping[str, Any] | None = None, deep: bool = False
+    ) -> Self:
+        """Create a copy of the scenario config."""
+        ...
+
+
+ScenarioConfigT = TypeVar("ScenarioConfigT", bound=ScenarioConfigProtocol)
 
 
 class BaseScenario(
     ABC, Generic[ScenarioConfigT, ObsType]
 ):  # defines scenario upon which the world is built
+    config: ScenarioConfigT
+
     def __init__(
         self,
-        config: ScenarioConfigT | None = None,
+        config: ScenarioConfigT,
         world_config: WorldConfig = DEFAULT_WORLD_CONFIG,
     ) -> None:
         self.config = config
@@ -107,3 +121,7 @@ class BaseScenario(
 
     def info(self, agent: Agent, world: World) -> dict:
         return {}
+
+    def export_spawned_config(self, world: World) -> ScenarioConfigT:
+        """Export current world state as a scenario config."""
+        return self.config.model_copy(deep=True)

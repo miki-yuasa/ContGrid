@@ -103,6 +103,39 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
             enabled=config.observation_config.closest_obs_pos,
         )
 
+    @staticmethod
+    def _to_position_tuple(pos: NDArray[np.float64]) -> Position:
+        return (float(pos[0]), float(pos[1]))
+
+    def export_spawned_config(self, world: World) -> RoomsScenarioConfig:
+        """Export current world state as a RoomsScenarioConfig.
+
+        Captures current spawned positions for agent, goal, lavas, and holes,
+        while preserving all other configuration fields.
+        """
+        assert self.config
+
+        config = self.config.model_copy(deep=True)
+
+        if world.agents:
+            config.spawn_config.agent = self._to_position_tuple(world.agents[0].state.pos)
+
+        config.spawn_config.goal.pos = self._to_position_tuple(self.goal.state.pos)
+
+        for lava_cfg, lava_landmark in zip(
+            config.spawn_config.lavas,
+            self.lavas,
+        ):
+            lava_cfg.pos = self._to_position_tuple(lava_landmark.state.pos)
+
+        for hole_cfg, hole_landmark in zip(
+            config.spawn_config.holes,
+            self.holes,
+        ):
+            hole_cfg.pos = self._to_position_tuple(hole_landmark.state.pos)
+
+        return config
+
     def _create_spawn_strategy(self) -> SpawnStrategy:
         """Factory method to create appropriate spawn strategy."""
         assert self.config

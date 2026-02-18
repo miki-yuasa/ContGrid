@@ -1,5 +1,7 @@
 """RoomsEnv implementation."""
 
+from pathlib import Path
+
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
@@ -107,3 +109,22 @@ class RoomsEnv(BaseGymEnv[dict[str, NDArray], NDArray, RoomsScenarioConfig]):
             local_ratio=None,
             verbose=verbose,
         )
+
+    def export_spawned_config(self) -> RoomsScenarioConfig:
+        """Export current environment state as a RoomsScenarioConfig."""
+        scenario = self.scenario
+
+        return scenario.export_spawned_config(self.world)
+
+    def save_spawned_config(
+        self,
+        output_path: str | Path,
+        *,
+        indent: int = 2,
+    ) -> RoomsScenarioConfig:
+        """Save current environment state as a RoomsScenarioConfig JSON file."""
+        config = self.export_spawned_config()
+        output = Path(output_path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(config.model_dump_json(indent=indent), encoding="utf-8")
+        return config
