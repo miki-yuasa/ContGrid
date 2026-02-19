@@ -1,7 +1,7 @@
 """RoomsEnv implementation."""
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from numpy.typing import NDArray
@@ -129,9 +129,12 @@ class RoomsEnv(BaseGymEnv[dict[str, NDArray], NDArray, RoomsScenarioConfig]):
         config = self.export_spawned_config()
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
+        json_dump: str = config.model_dump_json(indent=indent)
         if format == "json":
-            output.write_text(config.model_dump_json(indent=indent), encoding="utf-8")
+            output.write_text(json_dump, encoding="utf-8")
         else:
-            yaml_text = yaml.safe_dump(config.model_dump(), sort_keys=False)
+            # Use JSON dump to preserve field order, then convert to YAML
+            json_dict: dict[str, Any] = yaml.safe_load(json_dump)
+            yaml_text = yaml.dump(json_dict, sort_keys=False, indent=indent)
             output.write_text(yaml_text, encoding="utf-8")
         return config
