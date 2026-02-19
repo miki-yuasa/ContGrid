@@ -4,6 +4,7 @@ from pprint import pprint
 import imageio
 import numpy as np
 import pytest
+import yaml
 from gymnasium import spaces
 
 from contgrid.envs.rooms import (
@@ -103,19 +104,24 @@ class TestRoomsEnv:
 
         world_agent_pos = tuple(float(v) for v in env.world.agents[0].state.pos)
         world_goal_pos = tuple(float(v) for v in env.scenario.goal.state.pos)
-        world_lava_pos = [tuple(float(v) for v in lava.state.pos) for lava in env.scenario.lavas]
-        world_hole_pos = [tuple(float(v) for v in hole.state.pos) for hole in env.scenario.holes]
+        world_lava_pos = [
+            tuple(float(v) for v in lava.state.pos) for lava in env.scenario.lavas
+        ]
+        world_hole_pos = [
+            tuple(float(v) for v in hole.state.pos) for hole in env.scenario.holes
+        ]
 
         assert exported.spawn_config.agent == world_agent_pos
         assert exported.spawn_config.goal.pos == world_goal_pos
         assert [obj.pos for obj in exported.spawn_config.lavas] == world_lava_pos
         assert [obj.pos for obj in exported.spawn_config.holes] == world_hole_pos
 
-        output_path = tmp_path / "spawned_config.json"
+        output_path = tmp_path / "spawned_config.yaml"
         saved = env.save_spawned_config(output_path)
         assert output_path.exists()
 
-        loaded = RoomsScenarioConfig.model_validate_json(output_path.read_text())
+        loaded_data = yaml.safe_load(output_path.read_text())
+        loaded = RoomsScenarioConfig.model_validate(loaded_data)
         assert loaded.model_dump() == saved.model_dump()
 
         env.close()

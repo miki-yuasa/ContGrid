@@ -1,7 +1,9 @@
 """RoomsEnv implementation."""
 
 from pathlib import Path
+from typing import Literal
 
+import yaml
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
@@ -120,11 +122,16 @@ class RoomsEnv(BaseGymEnv[dict[str, NDArray], NDArray, RoomsScenarioConfig]):
         self,
         output_path: str | Path,
         *,
+        format: Literal["yaml", "json"] = "yaml",
         indent: int = 2,
     ) -> RoomsScenarioConfig:
-        """Save current environment state as a RoomsScenarioConfig JSON file."""
+        """Save current environment state as a RoomsScenarioConfig file."""
         config = self.export_spawned_config()
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(config.model_dump_json(indent=indent), encoding="utf-8")
+        if format == "json":
+            output.write_text(config.model_dump_json(indent=indent), encoding="utf-8")
+        else:
+            yaml_text = yaml.safe_dump(config.model_dump(), sort_keys=False)
+            output.write_text(yaml_text, encoding="utf-8")
         return config
