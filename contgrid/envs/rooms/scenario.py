@@ -117,8 +117,14 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
         config = self.config.model_copy(deep=True)
 
+        config.spawn_config.spawn_method = (
+            FixedSpawnConfig()
+        )  # Override to fixed since we're exporting specific positions
+
         if world.agents:
-            config.spawn_config.agent = self._to_position_tuple(world.agents[0].state.pos)
+            config.spawn_config.agent = self._to_position_tuple(
+                world.agents[0].state.pos
+            )
 
         config.spawn_config.goal.pos = self._to_position_tuple(self.goal.state.pos)
 
