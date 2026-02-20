@@ -483,11 +483,11 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
     @classmethod
     def _choose_new_pos(
         cls, spawn_pos: SpawnPos, free_cells: list[CellPosition], np_random: Generator
-    ) -> CellPosition:
-        new_pos: CellPosition
+    ) -> Position:
+        new_pos: Position
         match spawn_pos:
             case tuple() as pos:
-                new_pos = (int(pos[0]), int(pos[1]))
+                new_pos = (pos[0], pos[1])
             case list() as pos_list if pos_list:
                 cell_pos_list: list[CellPosition] = pos_list  # type: ignore
                 available_pos: list[CellPosition] = list(
