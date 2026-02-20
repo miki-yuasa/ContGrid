@@ -226,12 +226,12 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
 
     def _format_spawn_pos(
         self, spawn_pos: SpawnPos
-    ) -> CellPosition | list[CellPosition] | None:
+    ) -> Position | list[Position] | None:
         match spawn_pos:
             case list():
-                return [(int(pos[0]), int(pos[1])) for pos in spawn_pos]
+                return [(float(pos[0]), float(pos[1])) for pos in spawn_pos]
             case tuple():
-                return (int(spawn_pos[0]), int(spawn_pos[1]))
+                return (float(spawn_pos[0]), float(spawn_pos[1]))
             case None:
                 return None
             case _:
