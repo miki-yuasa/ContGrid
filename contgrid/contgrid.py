@@ -495,7 +495,7 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         return self._states_for_positions(free_positions)
 
     def all_possible_states_at_resolution(
-        self, resolution: float | tuple[float, float]
+        self, resolution: float | tuple[float, float] = 1.0
     ) -> dict[str, dict[Position, ObsType]]:
         """
         Get all possible states for each agent sampled at arbitrary spacing.
@@ -593,3 +593,23 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
 
     def close(self):
         return self.env.close()
+
+    def all_possible_states_at_resolution(
+        self, resolution: float | tuple[float, float] = 1.0
+    ) -> dict[str, dict[Position, ObsType]]:
+        """
+        Get all possible states for each agent sampled at arbitrary spacing.
+
+        Parameters
+        ----------
+        resolution : float | tuple[float, float]
+            Spacing in world units used to sample positions. If a tuple is
+            provided, it is interpreted as ``(x_spacing, y_spacing)``.
+
+        Returns
+        -------
+        possible_states : dict[str, dict[Position, ObsType]]
+            A dictionary where each key is an agent's name and the value is another
+            dictionary mapping sampled positions to observations for that agent.
+        """
+        return self.env.all_possible_states_at_resolution(resolution)
