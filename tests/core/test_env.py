@@ -1,8 +1,10 @@
 import os
 
 import numpy as np
+import pytest
 from gymnasium import spaces
 from PIL import Image
+from pydantic import BaseModel
 
 from contgrid.contgrid import BaseEnv
 from contgrid.core import Agent, AgentState, World
@@ -11,8 +13,15 @@ from contgrid.core.entities import EntityState, Landmark
 from contgrid.core.scenario import BaseScenario
 
 
-class SimpleScenario(BaseScenario[None, np.ndarray]):
+class DummyScenarioConfig(BaseModel):
+    pass
+
+
+class SimpleScenario(BaseScenario[DummyScenarioConfig, np.ndarray]):
     """A simple test scenario with one agent and one landmark"""
+
+    def __init__(self):
+        super().__init__(config=DummyScenarioConfig())
 
     def init_agents(self, world: World, np_random=None) -> list[Agent]:
         """Initialize a single agent in the world"""
@@ -163,6 +172,80 @@ class TestEnvironmentRendering:
         env.close()
 
         print(f"Successfully rendered stepped environment to {output_path}")
+
+
+class TestAllPossibleStates:
+    """Tests for state enumeration helpers on BaseEnv."""
+
+    def test_all_possible_states_matches_free_cells(self):
+        scenario = SimpleScenario()
+        env = BaseEnv(scenario=scenario, max_cycles=10)
+        env.reset(seed=42)
+
+        states = env.all_possible_states()
+        layout = env.grid.layout
+        expected_free_cells = sum(cell != "#" for row in layout for cell in row)
+
+        for agent_name in env.possible_agents:
+            assert len(states[agent_name]) == expected_free_cells
+
+        env.close()
+
+    def test_all_possible_states_at_resolution_one_matches_legacy(self):
+        scenario = SimpleScenario()
+        env = BaseEnv(scenario=scenario, max_cycles=10)
+        env.reset(seed=42)
+
+        legacy_states = env.all_possible_states()
+        sampled_states = env.all_possible_states_at_resolution(env.grid.cell_size)
+
+        for agent_name in env.possible_agents:
+            assert set(sampled_states[agent_name].keys()) == set(
+                legacy_states[agent_name].keys()
+            )
+
+        env.close()
+
+    def test_all_possible_states_at_finer_resolution_has_more_samples(self):
+        scenario = SimpleScenario()
+        env = BaseEnv(scenario=scenario, max_cycles=10)
+        env.reset(seed=42)
+
+        legacy_states = env.all_possible_states()
+        finer_states = env.all_possible_states_at_resolution(env.grid.cell_size / 2)
+
+        for agent_name in env.possible_agents:
+            assert len(finer_states[agent_name]) > len(legacy_states[agent_name])
+
+        env.close()
+
+    def test_all_possible_states_at_resolution_restores_agent_position(self):
+        scenario = SimpleScenario()
+        env = BaseEnv(scenario=scenario, max_cycles=10)
+        env.reset(seed=42)
+
+        original_positions = {
+            agent.name: agent.state.pos.copy() for agent in env.world.agents
+        }
+        env.all_possible_states_at_resolution((0.5, 1.0))
+
+        for agent in env.world.agents:
+            np.testing.assert_allclose(agent.state.pos, original_positions[agent.name])
+
+        env.close()
+
+    def test_all_possible_states_at_resolution_rejects_non_positive_spacing(self):
+        scenario = SimpleScenario()
+        env = BaseEnv(scenario=scenario, max_cycles=10)
+        env.reset(seed=42)
+
+        with pytest.raises(ValueError, match="resolution steps must be positive"):
+            env.all_possible_states_at_resolution(0.0)
+
+        with pytest.raises(ValueError, match="resolution steps must be positive"):
+            env.all_possible_states_at_resolution((0.5, -1.0))
+
+        env.close()
 
 
 if __name__ == "__main__":

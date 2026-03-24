@@ -384,6 +384,103 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             self.fig = None
             self.ax = None
 
+    def _free_positions_from_grid_cells(self) -> list[Position]:
+        """Get free positions at the legacy grid-cell resolution."""
+        layout = self.grid.layout
+        n_rows = len(layout)
+        n_cols = len(layout[0]) if layout else 0
+
+        free_positions: list[Position] = []
+        for r in range(n_rows):
+            for c in range(n_cols):
+                if layout[r][c] != "#":
+                    x = c * self.grid.cell_size
+                    y = (n_rows - 1 - r) * self.grid.cell_size
+                    free_positions.append((x, y))
+        return free_positions
+
+    def _free_positions_from_resolution(
+        self, resolution: float | tuple[float, float]
+    ) -> list[Position]:
+        """Get free positions sampled at an arbitrary spacing in world units."""
+        layout = self.grid.layout
+        n_rows = len(layout)
+        n_cols = len(layout[0]) if layout else 0
+        if n_rows == 0 or n_cols == 0:
+            return []
+
+        if isinstance(resolution, tuple):
+            step_x, step_y = resolution
+        else:
+            step_x = resolution
+            step_y = resolution
+
+        if step_x <= 0 or step_y <= 0:
+            raise ValueError("resolution steps must be positive")
+
+        cell_size = self.grid.cell_size
+        max_x = (n_cols - 1) * cell_size
+        max_y = (n_rows - 1) * cell_size
+        eps = 1e-12
+        ndigits = 10
+
+        def sample_axis(max_value: float, step: float) -> list[float]:
+            axis_values: list[float] = []
+            value = 0.0
+            while value <= max_value + eps:
+                axis_values.append(round(min(value, max_value), ndigits))
+                value += step
+            if axis_values and not np.isclose(axis_values[-1], max_value):
+                axis_values.append(round(max_value, ndigits))
+            return axis_values
+
+        x_values = sample_axis(max_x, step_x)
+        y_values = sample_axis(max_y, step_y)
+
+        free_positions: list[Position] = []
+        seen: set[Position] = set()
+        for y in y_values:
+            row_from_bottom = int(np.floor(y / cell_size + 0.5))
+            r = n_rows - 1 - row_from_bottom
+            if r < 0 or r >= n_rows:
+                continue
+
+            for x in x_values:
+                c = int(np.floor(x / cell_size + 0.5))
+                if c < 0 or c >= n_cols:
+                    continue
+                if layout[r][c] == "#":
+                    continue
+
+                pos = (round(x, ndigits), round(y, ndigits))
+                if pos not in seen:
+                    seen.add(pos)
+                    free_positions.append(pos)
+
+        return free_positions
+
+    def _states_for_positions(
+        self, free_positions: list[Position]
+    ) -> dict[str, dict[Position, ObsType]]:
+        """Compute observations for each agent over a list of positions."""
+        possible_states: dict[str, dict[Position, ObsType]] = {}
+
+        for agent in self.world.agents:
+            agent_states: dict[Position, ObsType] = {}
+            original_pos = agent.state.pos.copy()
+
+            try:
+                for pos in free_positions:
+                    agent.state.pos = np.array(pos, dtype=np.float64)
+                    obs = self.scenario.observation(agent, self.world)
+                    agent_states[pos] = obs
+            finally:
+                agent.state.pos = original_pos
+
+            possible_states[agent.name] = agent_states
+
+        return possible_states
+
     def all_possible_states(self) -> dict[str, dict[Position, ObsType]]:
         """
         Get all possible states for each agent in the environment.
@@ -394,40 +491,29 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             A dictionary where each key is an agent's name and the value is another
             dictionary mapping that agent's positions to observations for that agent.
         """
-        possible_states: dict[str, dict[Position, ObsType]] = {}
+        free_positions = self._free_positions_from_grid_cells()
+        return self._states_for_positions(free_positions)
 
-        # Get all free cells in the grid (non-wall cells)
-        layout = self.grid.layout
-        n_rows = len(layout)
-        n_cols = len(layout[0]) if layout else 0
+    def all_possible_states_at_resolution(
+        self, resolution: float | tuple[float, float]
+    ) -> dict[str, dict[Position, ObsType]]:
+        """
+        Get all possible states for each agent sampled at arbitrary spacing.
 
-        free_positions: list[Position] = []
-        for r in range(n_rows):
-            for c in range(n_cols):
-                if layout[r][c] != "#":
-                    # Convert grid cell to continuous position (center of cell)
-                    x = c * self.grid.cell_size
-                    y = (n_rows - 1 - r) * self.grid.cell_size
-                    free_positions.append((x, y))
+        Parameters
+        ----------
+        resolution : float | tuple[float, float]
+            Spacing in world units used to sample positions. If a tuple is
+            provided, it is interpreted as ``(x_spacing, y_spacing)``.
 
-        # For each agent, compute observations for all possible positions
-        for agent in self.world.agents:
-            agent_states: dict[Position, ObsType] = {}
-            # Store original position
-            original_pos = agent.state.pos.copy()
-
-            for pos in free_positions:
-                # Temporarily set agent to this position
-                agent.state.pos = np.array(pos, dtype=np.float64)
-                # Get observation for this position
-                obs = self.scenario.observation(agent, self.world)
-                agent_states[pos] = obs
-
-            # Restore original position
-            agent.state.pos = original_pos
-            possible_states[agent.name] = agent_states
-
-        return possible_states
+        Returns
+        -------
+        possible_states : dict[str, dict[Position, ObsType]]
+            A dictionary where each key is an agent's name and the value is another
+            dictionary mapping sampled positions to observations for that agent.
+        """
+        free_positions = self._free_positions_from_resolution(resolution)
+        return self._states_for_positions(free_positions)
 
 
 class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfigT]):
