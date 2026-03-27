@@ -514,7 +514,7 @@ class DiscreteAng(ActionMode[np.integer]):
         # Handle wrap-around for direction
         dir_sum = np.mod(dir_sum, self.num_directions)
 
-        return dir_sum.astype(np.integer)
+        return dir_sum.astype(np.int64)
 
 
 class ContinuousAng(ActionMode[NDArray[np.float64]]):
