@@ -1,7 +1,6 @@
 """Observation factory classes for the Rooms environment."""
 
-from abc import ABC, abstractmethod
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 from gymnasium import spaces
