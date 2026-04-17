@@ -24,7 +24,7 @@ class BaseObsFactory(ABC):
     @abstractmethod
     def observation(
         self, agent: Agent, *args: Any, **kwargs: Any
-    ) -> dict[str, NDArray[np.float64]]:
+    ) -> dict[str, NDArray]:
         """Return observation dictionary."""
         pass
 
