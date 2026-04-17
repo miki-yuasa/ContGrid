@@ -13,8 +13,7 @@ from .agent import Agent
 class BaseObsFactory(ABC):
     """Base class for observation factories."""
 
-    def __init__(self, room_scale: float):
-        self.room_scale = room_scale
+    room_scale: float = 1.0
 
     @abstractmethod
     def obs_space_dict(self, *args: Any, **kwargs: Any) -> dict[str, spaces.Space]:

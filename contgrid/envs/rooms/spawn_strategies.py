@@ -14,7 +14,8 @@ from contgrid.core.typing import Position
 from .topology import LineSegment, RoomTopology, get_relevant_path_segments
 
 if TYPE_CHECKING:
-    from .scenario import ObjConfig
+    from .configs import ObjConfig
+    from .scenario import RoomsScenario
 
 
 class SpawnMode(str, Enum):

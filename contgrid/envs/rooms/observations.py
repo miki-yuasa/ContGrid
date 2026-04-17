@@ -13,7 +13,7 @@ class GoalDistObsFactory(BaseObsFactory):
     """Factory for goal distance observations."""
 
     def __init__(self, room_scale: float, dist_mode: Literal["all", "none"]):
-        super().__init__(room_scale)
+        self.room_scale = room_scale
         self.dist_mode = dist_mode
 
     def obs_space_dict(self, max_dist: float) -> dict[str, spaces.Space]:
@@ -43,7 +43,7 @@ class DoorwayDistObsFactory(BaseObsFactory):
         dist_mode: Literal["all", "none"],
         name: str = "doorway_dist",
     ):
-        super().__init__(room_scale)
+        self.room_scale = room_scale
         self.name = name
         self.dist_mode = dist_mode
 
@@ -76,7 +76,7 @@ class ObstacleDistObsFactory(BaseObsFactory):
         dist_mode: Literal["closest", "all", "none"],
         name: str = "obstacle_dist",
     ):
-        super().__init__(room_scale)
+        self.room_scale = room_scale
         self.name = name
         self.dist_mode = dist_mode
 
@@ -111,7 +111,7 @@ class ClosestObsPosObsFactory(BaseObsFactory):
     """Factory for closest obstacle position observations."""
 
     def __init__(self, room_scale: float, enabled: bool):
-        super().__init__(room_scale)
+        self.room_scale = room_scale
         self.enabled = enabled
 
     def obs_space_dict(self) -> dict[str, spaces.Space]:
