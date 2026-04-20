@@ -60,8 +60,8 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self.red_dist_obs_factory = ZoneDistObsFactory(
             room_scale=self.room_scale, name="red_dist"
         )
-        self.blue_dist_obs_factory = ZoneDistObsFactory(
-            room_scale=self.room_scale, name="blue_dist"
+        self.white_dist_obs_factory = ZoneDistObsFactory(
+            room_scale=self.room_scale, name="white_dist"
         )
         self.black_dist_obs_factory = ZoneDistObsFactory(
             room_scale=self.room_scale, name="black_dist"
@@ -70,12 +70,12 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
 
         self.yellow_visit_count: int = 0
         self.red_visit_count: int = 0
-        self.blue_visit_count: int = 0
+        self.white_visit_count: int = 0
         self.black_visit_count: int = 0
 
         self._yellow_zone_active: bool = False
         self._red_zone_active: bool = False
-        self._blue_zone_active: bool = False
+        self._white_zone_active: bool = False
         self._black_zone_active: bool = False
 
         self.current_subtask_idx: int = 0
@@ -117,8 +117,8 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             zone_cfg.pos = self._to_position_tuple(zone_landmark.state.pos)
 
         for zone_cfg, zone_landmark in zip(
-            config.spawn_config.blue_zone,
-            self.blue,
+            config.spawn_config.white_zone,
+            self.white,
         ):
             zone_cfg.pos = self._to_position_tuple(zone_landmark.state.pos)
 
@@ -167,7 +167,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             for p in np.argwhere(world.numeric_grid == 0).tolist()
         ]
 
-        # Initialize yellow, red, blue, and black zones
+        # Initialize yellow, red, white, and black zones
         self.yellow = [
             Landmark(
                 name=f"yellow_{i}",
@@ -190,16 +190,16 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             )
             for i, config in enumerate(self.config.spawn_config.red_zone)
         ]
-        self.blue = [
+        self.white = [
             Landmark(
-                name=f"blue_{i}",
+                name=f"white_{i}",
                 size=self.config.spawn_config.zone_size,
                 collide=False,
-                color=Color.BLUE.name,
+                color=Color.WHITE.name,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
                 reset_config=ResetConfig(spawn_pos=self._format_spawn_pos(config.pos)),
             )
-            for i, config in enumerate(self.config.spawn_config.blue_zone)
+            for i, config in enumerate(self.config.spawn_config.white_zone)
         ]
         self.black = [
             Landmark(
@@ -213,7 +213,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             for i, config in enumerate(self.config.spawn_config.black_zone)
         ]
 
-        return self.yellow + self.red + self.blue + self.black
+        return self.yellow + self.red + self.white + self.black
 
     def _format_spawn_pos(
         self, spawn_pos: SpawnPos
@@ -315,11 +315,11 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             max_attempts=max_spawn_attempts,
         )
 
-        # Spawn blue zones
-        blue_positions = self._spawn_obstacle_type(
-            obstacle_type="blue",
-            obstacles=self.blue,
-            obstacle_configs=self.config.spawn_config.blue_zone,
+        # Spawn white zones
+        white_positions = self._spawn_obstacle_type(
+            obstacle_type="white",
+            obstacles=self.white,
+            obstacle_configs=self.config.spawn_config.white_zone,
             world=world,
             np_random=np_random,
             agent_pos=agent_pos,
@@ -340,7 +340,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         # Store for observations
         self.yellow_pos = np.array(yellow_positions, dtype=np.float64)
         self.red_pos = np.array(red_positions, dtype=np.float64)
-        self.blue_pos = np.array(blue_positions, dtype=np.float64)
+        self.white_pos = np.array(white_positions, dtype=np.float64)
         self.black_pos = np.array(black_positions, dtype=np.float64)
 
     def _spawn_obstacle_type(
@@ -433,8 +433,8 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self.closest_red_pos = self._find_closest_obstacle(
             agent.state.pos, self.red_pos
         )
-        self.closest_blue_pos = self._find_closest_obstacle(
-            agent.state.pos, self.blue_pos
+        self.closest_white_pos = self._find_closest_obstacle(
+            agent.state.pos, self.white_pos
         )
         self.closest_black_pos = self._find_closest_obstacle(
             agent.state.pos, self.black_pos
@@ -444,12 +444,12 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
     def _reset_visit_counts(self) -> None:
         self.yellow_visit_count = 0
         self.red_visit_count = 0
-        self.blue_visit_count = 0
+        self.white_visit_count = 0
         self.black_visit_count = 0
 
         self._yellow_zone_active = False
         self._red_zone_active = False
-        self._blue_zone_active = False
+        self._white_zone_active = False
         self._black_zone_active = False
 
     def _is_inside_zone(
@@ -463,21 +463,21 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
     def _update_visit_counts(self, agent_pos: NDArray[np.float64]) -> None:
         in_yellow_zone = self._is_inside_zone(agent_pos, self.yellow_pos)
         in_red_zone = self._is_inside_zone(agent_pos, self.red_pos)
-        in_blue_zone = self._is_inside_zone(agent_pos, self.blue_pos)
+        in_white_zone = self._is_inside_zone(agent_pos, self.white_pos)
         in_black_zone = self._is_inside_zone(agent_pos, self.black_pos)
 
         if in_yellow_zone and not self._yellow_zone_active:
             self.yellow_visit_count += 1
         if in_red_zone and not self._red_zone_active:
             self.red_visit_count += 1
-        if in_blue_zone and not self._blue_zone_active:
-            self.blue_visit_count += 1
+        if in_white_zone and not self._white_zone_active:
+            self.white_visit_count += 1
         if in_black_zone and not self._black_zone_active:
             self.black_visit_count += 1
 
         self._yellow_zone_active = in_yellow_zone
         self._red_zone_active = in_red_zone
-        self._blue_zone_active = in_blue_zone
+        self._white_zone_active = in_white_zone
         self._black_zone_active = in_black_zone
 
     def _get_visit_counts(self) -> NDArray[np.int32]:
@@ -485,7 +485,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             [
                 self.yellow_visit_count,
                 self.red_visit_count,
-                self.blue_visit_count,
+                self.white_visit_count,
                 self.black_visit_count,
             ],
             dtype=np.int32,
@@ -496,7 +496,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         zone_type_to_index = {
             ZoneType.YELLOW: 0,
             ZoneType.RED: 1,
-            ZoneType.BLUE: 2,
+            ZoneType.WHITE: 2,
             ZoneType.BLACK: 3,
         }
         return zone_type_to_index[zone_type]
@@ -556,7 +556,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         obs["wall_dist"] = wall_dists
         obs |= self.yellow_dist_obs_factory.observation(agent, self.yellow_pos)
         obs |= self.red_dist_obs_factory.observation(agent, self.red_pos)
-        obs |= self.blue_dist_obs_factory.observation(agent, self.blue_pos)
+        obs |= self.white_dist_obs_factory.observation(agent, self.white_pos)
         obs |= self.black_dist_obs_factory.observation(agent, self.black_pos)
         obs |= self.visit_count_obs_factory.observation(agent, self._get_visit_counts())
         return obs
@@ -594,8 +594,10 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         obs_space_dict |= self.red_dist_obs_factory.obs_space_dict(
             num_zones=len(self.red), low_bound=rel_low_bound, high_bound=rel_high_bound
         )
-        obs_space_dict |= self.blue_dist_obs_factory.obs_space_dict(
-            num_zones=len(self.blue), low_bound=rel_low_bound, high_bound=rel_high_bound
+        obs_space_dict |= self.white_dist_obs_factory.obs_space_dict(
+            num_zones=len(self.white),
+            low_bound=rel_low_bound,
+            high_bound=rel_high_bound,
         )
         obs_space_dict |= self.black_dist_obs_factory.obs_space_dict(
             num_zones=len(self.black),
@@ -658,8 +660,8 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
 
         d_y, _ = self.get_closest(agent.state.pos, self.yellow_pos)
         d_r, _ = self.get_closest(agent.state.pos, self.red_pos)
-        d_b, _ = self.get_closest(agent.state.pos, self.blue_pos)
-        d_j, _ = self.get_closest(agent.state.pos, self.black_pos)
+        d_w, _ = self.get_closest(agent.state.pos, self.white_pos)
+        d_b, _ = self.get_closest(agent.state.pos, self.black_pos)
 
         # Handle cases where there are no obstacles
         d_y_cl = (
@@ -672,12 +674,12 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             if len(self.closest_red_pos) > 0
             else np.inf
         )
-        d_b_cl = (
-            np.linalg.norm(agent.state.pos - self.closest_blue_pos)
-            if len(self.closest_blue_pos) > 0
+        d_w_cl = (
+            np.linalg.norm(agent.state.pos - self.closest_white_pos)
+            if len(self.closest_white_pos) > 0
             else np.inf
         )
-        d_j_cl = (
+        d_b_cl = (
             np.linalg.norm(agent.state.pos - self.closest_black_pos)
             if len(self.closest_black_pos) > 0
             else np.inf
@@ -686,12 +688,12 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         info_dict["distances"] = {
             "yellow": d_y,
             "red": d_r,
-            "blue": d_b,
-            "black": d_j,
+            "white": d_w,
+            "black": d_b,
             "closest_yellow": d_y_cl,
             "closest_red": d_r_cl,
-            "closest_blue": d_b_cl,
-            "closest_black": d_j_cl,
+            "closest_white": d_w_cl,
+            "closest_black": d_b_cl,
         }
 
         subtask_seq = self.config.spawn_config.subtask_seq
@@ -699,7 +701,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         info_dict["visit_counts"] = {
             "yellow": self.yellow_visit_count,
             "red": self.red_visit_count,
-            "blue": self.blue_visit_count,
+            "white": self.white_visit_count,
             "black": self.black_visit_count,
         }
         if self.current_subtask_idx < len(subtask_seq):

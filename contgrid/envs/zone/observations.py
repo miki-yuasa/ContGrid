@@ -8,7 +8,7 @@ from contgrid.core import Agent, BaseObsFactory
 
 
 class ZoneDistObsFactory(BaseObsFactory):
-    """Factory for zone distance observations (blue, yellow, black, red)."""
+    """Factory for zone distance observations (white, yellow, black, red)."""
 
     def __init__(
         self,
@@ -48,7 +48,7 @@ class ZoneDistObsFactory(BaseObsFactory):
 
 
 class VisitCountObsFactory(BaseObsFactory):
-    """Factory for visitation count observations for the four zones (yellow, red, blue, black)."""
+    """Factory for visitation count observations for the four zones (yellow, red, white, black)."""
 
     def __init__(
         self,

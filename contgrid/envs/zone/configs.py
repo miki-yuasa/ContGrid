@@ -27,7 +27,7 @@ class ZoneType(str, Enum):
 
     YELLOW = "yellow"
     RED = "red"
-    BLUE = "blue"
+    WHITE = "white"
     BLACK = "black"
 
 
@@ -65,7 +65,7 @@ class SpawnConfig(BaseModel):
         default_factory=lambda: [
             SubtaskConfig(
                 goal=ZoneType.YELLOW,
-                obstacle=ZoneType.BLUE,
+                obstacle=ZoneType.WHITE,
                 reward=50.0,
                 penalty=-1.0,
                 goal_absorbing=False,
@@ -73,7 +73,7 @@ class SpawnConfig(BaseModel):
             ),
             SubtaskConfig(
                 goal=ZoneType.RED,
-                obstacle=ZoneType.BLUE,
+                obstacle=ZoneType.WHITE,
                 reward=50.0,
                 penalty=-1.0,
                 goal_absorbing=False,
@@ -83,7 +83,7 @@ class SpawnConfig(BaseModel):
     )
     yellow_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
     red_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
-    blue_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
+    white_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
     black_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
     agent_size: float = 0.1
     zone_size: float = 0.35
