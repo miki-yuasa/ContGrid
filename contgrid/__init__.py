@@ -53,3 +53,10 @@ gym.register(
     entry_point="contgrid.envs.rooms:RoomsEnv",
     max_episode_steps=250,
 )
+
+### Zone Environment ###
+gym.register(
+    id="contgrid/Zone-v0",
+    entry_point="contgrid.envs.zone:ZoneEnv",
+    max_episode_steps=250,
+)

@@ -45,43 +45,31 @@ class ZoneEnvConfig(BaseModel):
 
 class ZoneEnv(BaseGymEnv[dict[str, NDArray], NDArray, ZoneScenarioConfig]):
     """
-    Continuous Grid World with Zone Environment
+    Continuous multi-zone navigation environment.
 
-    This environment is a continuous 2D grid world where an agent must navigate
-    through zones to reach a goal while avoiding obstacles like lava and holes.
+    The agent moves in a walled 2D world that contains color-coded zones
+    (yellow, red, white, black). Tasks are defined as an ordered sequence in
+    ``spawn_config.subtask_seq`` where each subtask specifies:
+    - a goal zone that grants reward when visited,
+    - an optional obstacle zone that applies penalty when visited,
+    - whether goal/obstacle visits are absorbing.
 
     Observation:
-        Type: Dict
-        {
-            "agent_pos": Box(2,)  # Agent's position (x, y)
-            "goal_pos": Box(2,)   # Goal's position (x, y)
-            "lava_pos": Box(2 * num_lavas,)  # Positions of lava objects
-            "hole_pos": Box(2 * num_holes,)  # Positions of hole objects
-            "goal_dist": Box(1,)  # Distance to the goal
-            "lava_dist": Box(1,)  # Distance to the closest lava
-            "hole_dist": Box(1,)  # Distance to the closest hole
-        }
+        A dict containing agent kinematics, wall distances, relative zone
+        positions (``yellow_dist``, ``red_dist``, ``white_dist``, ``black_dist``),
+        and zone visitation counts (``zone_visits``).
 
     Actions:
-        Type: Box(2,)
-        Num     Action
-        0       Move in x direction (-1.0 to 1.0)
-        1       Move in y direction (-1.0 to 1.0)
+        Controlled by ``action_config``. The default mode is 2D continuous motion.
 
     Reward:
-        - Step penalty: -config.reward_config.step_penalty per step
-        - Reaching the goal: +config.spawn_config.goal.reward
-        - Falling into lava or hole: config.spawn_config.lavas[i].reward or
-          config.spawn_config.holes[i].reward
-
-    Starting State:
-        - Agent starts at config.spawn_config.agent position or random free cell
-        - Goal, lava, and holes are placed at their configured positions
+        - Step penalty while the agent remains active.
+        - Subtask goal reward on entering the active goal zone.
+        - Subtask obstacle penalty on entering the active obstacle zone.
 
     Episode Termination:
-        - Agent reaches the goal
-        - Agent falls into an absorbing lava or hole
-        - Max episode steps reached
+        - Agent enters an absorbing goal/obstacle zone.
+        - Max episode steps reached.
     """
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}

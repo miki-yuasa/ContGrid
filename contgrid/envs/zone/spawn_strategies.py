@@ -80,7 +80,7 @@ class FixedSpawnStrategy(SpawnStrategy):
         obstacle_landmarks_by_type = {
             "yellow": scenario.yellow,
             "red": scenario.red,
-            "blue": scenario.blue,
+            "white": scenario.white,
             "black": scenario.black,
         }
         obstacle_landmarks = obstacle_landmarks_by_type.get(obstacle_type, [])
