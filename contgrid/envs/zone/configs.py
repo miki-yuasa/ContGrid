@@ -37,7 +37,7 @@ class SubtaskConfig(BaseModel):
     goal: ZoneType
     obstacle: ZoneType | None = None
     reward: float = 0.0
-    penalty: float = 0.0
+    penalty: float = Field(default=0.0, le=0.0)
     goal_absorbing: bool = False
     obstacle_absorbing: bool = False
 
