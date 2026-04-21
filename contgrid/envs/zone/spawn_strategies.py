@@ -27,7 +27,7 @@ class UniformRandomConfig(BaseModel):
     """Configuration for uniform random spawning."""
 
     mode: Literal[SpawnMode.UNIFORM_RANDOM] = SpawnMode.UNIFORM_RANDOM
-    min_spacing: float = 0.5
+    min_spacing: float = 1.5
 
 
 class FixedSpawnConfig(BaseModel):
