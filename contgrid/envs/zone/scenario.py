@@ -579,9 +579,6 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             "agent_vel": spaces.Box(
                 low=-max_dist, high=max_dist, shape=(2,), dtype=np.float64
             ),
-            "goal_pos": spaces.Box(
-                low=rel_low_bound, high=rel_high_bound, shape=(2,), dtype=np.float64
-            ),
             "wall_dist": spaces.Box(
                 low=0.0, high=max_dist, shape=(4,), dtype=np.float64
             ),
