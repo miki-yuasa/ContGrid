@@ -568,7 +568,7 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
 
         return clipped
 
-    def _get_existing_obstacles(self, scenario: "RoomsScenario") -> list[Position]:  # type: ignore
+    def _get_existing_obstacles(self, scenario: "RoomsScenario") -> list[Position]:
         """Get all existing obstacle positions (lavas and holes already spawned)."""
         existing = []
 

@@ -367,12 +367,31 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
         self.fig.tight_layout(pad=0)
         # Save the plot for debug
         if self.render_mode == "rgb_array":
-            # Convert matplotlib figure to numpy array
             canvas = FigureCanvasAgg(self.fig)
             canvas.draw()
             buf = canvas.buffer_rgba()
             rgb_array = np.asarray(buf)[:, :, :3]  # Remove alpha channel
-            return rgb_array
+
+            # Crop to the axes viewport to remove letterbox whitespace around maps.
+            bbox = self.ax.get_window_extent()
+            x0 = int(np.floor(bbox.x0))
+            x1 = int(np.ceil(bbox.x1))
+            y0 = int(np.floor(bbox.y0))
+            y1 = int(np.ceil(bbox.y1))
+
+            height, width = rgb_array.shape[:2]
+            x0 = max(0, min(width, x0))
+            x1 = max(0, min(width, x1))
+            y0 = max(0, min(height, y0))
+            y1 = max(0, min(height, y1))
+
+            if x1 <= x0 or y1 <= y0:
+                return rgb_array
+
+            # Matplotlib display coordinates use bottom-left origin; arrays use top-left.
+            row_start = height - y1
+            row_end = height - y0
+            return np.ascontiguousarray(rgb_array[row_start:row_end, x0:x1])
         elif self.render_mode == "human":
             plt.draw()
             plt.pause(1.0 / self.metadata["render_fps"])

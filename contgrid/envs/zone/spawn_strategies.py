@@ -132,6 +132,40 @@ class UniformRandomSpawnStrategy(SpawnStrategy):
     def __init__(self, config: UniformRandomConfig):
         self.config = config
 
+    @staticmethod
+    def _valid_position_array(pos: NDArray[np.float64]) -> NDArray[np.float64] | None:
+        pos_array = np.asarray(pos, dtype=np.float64)
+        if pos_array.shape != (2,) or not np.isfinite(pos_array).all():
+            return None
+        return pos_array
+
+    def _get_existing_zone_positions(
+        self,
+        obstacle_type: str,
+        scenario: "ZoneScenario",
+    ) -> list[NDArray[np.float64]]:
+        """Return positions of already-spawned colors for cross-color spacing checks."""
+        spawn_order = ("yellow", "red", "white", "black")
+        if obstacle_type not in spawn_order:
+            return []
+
+        landmarks_by_type = {
+            "yellow": scenario.yellow,
+            "red": scenario.red,
+            "white": scenario.white,
+            "black": scenario.black,
+        }
+        spawned_types = spawn_order[: spawn_order.index(obstacle_type)]
+
+        existing_positions: list[NDArray[np.float64]] = []
+        for zone_type in spawned_types:
+            for landmark in landmarks_by_type[zone_type]:
+                pos_array = self._valid_position_array(landmark.state.pos)
+                if pos_array is not None:
+                    existing_positions.append(pos_array)
+
+        return existing_positions
+
     def spawn_obstacles(
         self,
         num_obstacles: int,
@@ -144,10 +178,14 @@ class UniformRandomSpawnStrategy(SpawnStrategy):
     ) -> list[Position]:
         """Spawn obstacles uniformly in the walled area."""
         positions: list[Position] = []
+        position_arrays: list[NDArray[np.float64]] = []
 
         obstacle_radius = scenario.config.spawn_config.zone_size
         agent_radius = scenario.config.spawn_config.agent_size
         min_agent_distance = obstacle_radius + agent_radius
+        existing_zone_positions = self._get_existing_zone_positions(
+            obstacle_type, scenario
+        )
 
         wall_limits = world.grid.wall_limits
         min_x = wall_limits.min_x + obstacle_radius
@@ -186,13 +224,19 @@ class UniformRandomSpawnStrategy(SpawnStrategy):
                     continue
 
                 if any(
-                    np.linalg.norm(candidate - np.array(pos, dtype=np.float64))
-                    < self.config.min_spacing
-                    for pos in positions
+                    np.linalg.norm(candidate - pos_array) < self.config.min_spacing
+                    for pos_array in position_arrays
+                ):
+                    continue
+
+                if any(
+                    np.linalg.norm(candidate - existing_pos) < self.config.min_spacing
+                    for existing_pos in existing_zone_positions
                 ):
                     continue
 
                 positions.append((float(candidate[0]), float(candidate[1])))
+                position_arrays.append(candidate)
                 found_valid_position = True
                 break
 
