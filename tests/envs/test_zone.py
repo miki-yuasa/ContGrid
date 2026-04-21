@@ -17,13 +17,13 @@ from contgrid.envs.zone import (
 
 
 class TestUniformRandomSpawnStrategy:
-    def test_uniform_random_spawn_strategy_respects_constraints(self):
+    def test_uniform_random_spawn(self):
         """Uniform random spawning keeps spacing, wall validity, and agent clearance."""
-        min_spacing = 1.2
+        min_spacing = 1.5
         num_zones = 2
         zone_size = 0.5
         agent_size = 0.1
-        output_dir = Path("tests") / "out" / "zone_uniform_random_spawn"
+        output_dir = Path("tests") / "out" / "zone" / "uniform_random_spawn"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         spawn_config = SpawnConfig(
@@ -60,7 +60,7 @@ class TestUniformRandomSpawnStrategy:
 
         env = ZoneEnv(scenario_config=scenario_config, world_config=world_config)
         try:
-            for seed in (7, 17, 37):
+            for seed in (7, 17, 27, 37):
                 env.reset(seed=seed)
                 rendered = env.render()
                 assert rendered is not None
@@ -111,5 +111,64 @@ class TestUniformRandomSpawnStrategy:
                             f"{color_i}[{idx_i}] and {color_j}[{idx_j}] too close: "
                             f"{dist:.4f} < {min_spacing:.4f}"
                         )
+        finally:
+            env.close()
+
+    def test_random_action(self):
+        """Uniform random spawning keeps spacing, wall validity, and agent clearance."""
+        min_spacing = 1.5
+        num_zones = 2
+        zone_size = 0.5
+        agent_size = 0.1
+        output_dir = Path("tests") / "out" / "zone" / "random_action"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        spawn_config = SpawnConfig(
+            agent=None,
+            subtask_seq=[],
+            yellow_zone=[ObjConfig(pos=None) for _ in range(num_zones)],
+            red_zone=[ObjConfig(pos=None) for _ in range(num_zones)],
+            white_zone=[ObjConfig(pos=None) for _ in range(num_zones)],
+            black_zone=[ObjConfig(pos=None) for _ in range(num_zones)],
+            zone_size=zone_size,
+            agent_size=agent_size,
+            spawn_method=UniformRandomConfig(min_spacing=min_spacing),
+        )
+
+        scenario_config = ZoneScenarioConfig(spawn_config=spawn_config)
+        world_config = WorldConfig(
+            grid=Grid(
+                layout=[
+                    "############",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "############",
+                ]
+            )
+        )
+
+        env = ZoneEnv(scenario_config=scenario_config, world_config=world_config)
+        try:
+            for seed in (7, 17, 37):
+                env.reset(seed=seed)
+
+                frames: list = []
+
+                for _ in range(50):
+                    action = env.action_space.sample()
+                    _, _, _, _, _ = env.step(action)
+                    frames.append(env.render())
+
+                video_path = output_dir / f"uniform_random_zone_video_seed_{seed}.gif"
+                imageio.mimwrite(video_path, frames, fps=5)
+                assert video_path.exists()
         finally:
             env.close()

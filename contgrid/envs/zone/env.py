@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from contgrid.contgrid import DEFAULT_RENDER_CONFIG, BaseGymEnv, RenderConfig
-from contgrid.core import DEFAULT_ACTION_CONFIG, ActionModeConfig, Grid, WorldConfig
+from contgrid.core import ActionModeConfig, Grid, WorldConfig
 
 from .scenario import ZoneScenario, ZoneScenarioConfig
 
@@ -30,6 +30,11 @@ DEFAULT_WORLD_CONFIG = WorldConfig(
             "#############",
         ]
     )
+)
+
+DEFAULT_ACTION_CONFIG = ActionModeConfig(
+    action_mode="discrete_ang_directional",
+    action_mode_kwargs={"num_directions": 8, "num_vel_discrete": 6},
 )
 
 
