@@ -57,8 +57,9 @@ class VisitCountObsFactory(BaseObsFactory):
         self.name = name
 
     def obs_space_dict(self) -> dict[str, spaces.Space]:
-        shape = (4,)
-        return {self.name: spaces.Box(low=0, high=np.inf, shape=shape, dtype=np.int32)}
+        num_zones: int = 4
+        # Binary visitation counts (0 or 1) for each zone, hence MultiDiscrete with 2 options per zone
+        return {self.name: spaces.MultiDiscrete([2] * num_zones)}
 
     def observation(
         self, agent: Agent, visitation_counts: NDArray[np.int32]
@@ -66,4 +67,6 @@ class VisitCountObsFactory(BaseObsFactory):
         if len(visitation_counts) == 0:
             return {self.name: np.array([0, 0, 0, 0], dtype=np.int32)}
 
-        return {self.name: visitation_counts.astype(np.int32)}
+        # Clip visitation counts to 1 to indicate whether the agent has visited each zone at least once
+        visitation_counts = np.clip(visitation_counts, 0, 1).astype(np.int32)
+        return {self.name: visitation_counts}
