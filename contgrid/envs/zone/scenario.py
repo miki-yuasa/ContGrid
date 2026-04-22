@@ -660,38 +660,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         d_w, _ = self.get_closest(agent.state.pos, self.white_pos)
         d_b, _ = self.get_closest(agent.state.pos, self.black_pos)
 
-        # Handle cases where there are no obstacles
-        d_y_cl = (
-            np.linalg.norm(agent.state.pos - self.closest_yellow_pos)
-            if len(self.closest_yellow_pos) > 0
-            else np.inf
-        )
-        d_r_cl = (
-            np.linalg.norm(agent.state.pos - self.closest_red_pos)
-            if len(self.closest_red_pos) > 0
-            else np.inf
-        )
-        d_w_cl = (
-            np.linalg.norm(agent.state.pos - self.closest_white_pos)
-            if len(self.closest_white_pos) > 0
-            else np.inf
-        )
-        d_b_cl = (
-            np.linalg.norm(agent.state.pos - self.closest_black_pos)
-            if len(self.closest_black_pos) > 0
-            else np.inf
-        )
-
-        info_dict["distances"] = {
-            "yellow": d_y,
-            "red": d_r,
-            "white": d_w,
-            "black": d_b,
-            "closest_yellow": d_y_cl,
-            "closest_red": d_r_cl,
-            "closest_white": d_w_cl,
-            "closest_black": d_b_cl,
-        }
+        info_dict["distances"] = {"yellow": d_y, "red": d_r, "white": d_w, "black": d_b}
 
         subtask_seq = self.config.spawn_config.subtask_seq
         info_dict["is_success"] = self.is_success
