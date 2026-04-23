@@ -280,9 +280,12 @@ class DiscreteAngDirectional(ActionMode[NDArray[np.integer]]):
 
     name: str = "discrete_ang_directional"
 
-    def __init__(self, num_directions: int, num_vel_discrete: int) -> None:
+    def __init__(
+        self, num_directions: int, num_vel_discrete: int, min_vel: float = 0.0
+    ) -> None:
         self.num_directions = num_directions
         self.num_vel_discrete = num_vel_discrete
+        self.min_vel: float = min_vel
 
     def define_action_space(self, agent: Agent) -> Space[NDArray[np.integer]]:
         nvecs: list[int] = []
@@ -317,7 +320,7 @@ class DiscreteAngDirectional(ActionMode[NDArray[np.integer]]):
             vel_idx = int(action[1])
 
             angle = (direction_idx / self.num_directions) * 2 * np.pi
-            magnitude = (vel_idx / self.num_vel_discrete) * agent.u_range
+            magnitude = (vel_idx / self.num_vel_discrete) * (agent.u_range - self.min_vel) + self.min_vel
 
             x_vel = magnitude * np.cos(angle)
             y_vel = magnitude * np.sin(angle)
