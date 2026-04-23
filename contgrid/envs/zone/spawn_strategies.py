@@ -20,6 +20,7 @@ class SpawnMode(str, Enum):
     """Enumeration of available obstacle spawning methods."""
 
     FIXED = "fixed"
+    GAUSSIAN = "gaussian"
     UNIFORM_RANDOM = "uniform_random"
 
 
@@ -27,6 +28,14 @@ class UniformRandomConfig(BaseModel):
     """Configuration for uniform random spawning."""
 
     mode: Literal[SpawnMode.UNIFORM_RANDOM] = SpawnMode.UNIFORM_RANDOM
+    min_spacing: float = 1.5
+
+
+class GaussianSpawnConfig(BaseModel):
+    """Configuration for Gaussian spawning centered at the map center."""
+
+    mode: Literal[SpawnMode.GAUSSIAN] = SpawnMode.GAUSSIAN
+    gaussian_std: float = 1.0
     min_spacing: float = 1.5
 
 
@@ -38,7 +47,7 @@ class FixedSpawnConfig(BaseModel):
 
 # Union type for all spawn method configs with discriminator
 SpawnMethodConfig = Annotated[
-    UniformRandomConfig | FixedSpawnConfig,
+    GaussianSpawnConfig | UniformRandomConfig | FixedSpawnConfig,
     Discriminator("mode"),
 ]
 
@@ -211,6 +220,119 @@ class UniformRandomSpawnStrategy(SpawnStrategy):
                 )
 
                 # Keep candidates inside the non-wall free region.
+                if not world.wall_collision_checker.is_position_valid(
+                    obstacle_radius,
+                    world.contact_margin,
+                    (float(candidate[0]), float(candidate[1])),
+                ):
+                    continue
+
+                if agent_pos is not None and (
+                    np.linalg.norm(candidate - agent_pos) < min_agent_distance
+                ):
+                    continue
+
+                if any(
+                    np.linalg.norm(candidate - pos_array) < self.config.min_spacing
+                    for pos_array in position_arrays
+                ):
+                    continue
+
+                if any(
+                    np.linalg.norm(candidate - existing_pos) < self.config.min_spacing
+                    for existing_pos in existing_zone_positions
+                ):
+                    continue
+
+                positions.append((float(candidate[0]), float(candidate[1])))
+                position_arrays.append(candidate)
+                found_valid_position = True
+                break
+
+            if not found_valid_position:
+                break
+
+        return positions
+
+
+class GaussianSpawnStrategy(SpawnStrategy):
+    """Spawn obstacles from a Gaussian distribution centered on the map."""
+
+    def __init__(self, config: GaussianSpawnConfig):
+        self.config = config
+
+    @staticmethod
+    def _valid_position_array(pos: NDArray[np.float64]) -> NDArray[np.float64] | None:
+        pos_array = np.asarray(pos, dtype=np.float64)
+        if pos_array.shape != (2,) or not np.isfinite(pos_array).all():
+            return None
+        return pos_array
+
+    def _get_existing_zone_positions(
+        self,
+        obstacle_type: str,
+        scenario: "ZoneScenario",
+    ) -> list[NDArray[np.float64]]:
+        """Return positions of already-spawned zones (all colors) for cross-color spacing checks."""
+        all_spawned = getattr(scenario, "_all_spawned_positions", None)
+        if isinstance(all_spawned, list):
+            return all_spawned
+        return []
+
+    def spawn_obstacles(
+        self,
+        num_obstacles: int,
+        obstacle_type: str,
+        world: World,
+        scenario: "ZoneScenario",  # type: ignore
+        np_random: np.random.Generator,
+        agent_pos: NDArray[np.float64] | None = None,
+        obstacle_configs: list["ObjConfig"] | None = None,
+    ) -> list[Position]:
+        """Spawn obstacles with a Gaussian bias toward the center of the map."""
+        positions: list[Position] = []
+        position_arrays: list[NDArray[np.float64]] = []
+
+        obstacle_radius = scenario.config.spawn_config.zone_size
+        agent_radius = scenario.config.spawn_config.agent_size
+        min_agent_distance = obstacle_radius + agent_radius
+        existing_zone_positions = self._get_existing_zone_positions(
+            obstacle_type, scenario
+        )
+
+        wall_limits = world.grid.wall_limits
+        center = np.array(
+            [
+                (wall_limits.min_x + wall_limits.max_x) / 2.0,
+                (wall_limits.min_y + wall_limits.max_y) / 2.0,
+            ],
+            dtype=np.float64,
+        )
+
+        min_x = wall_limits.min_x + obstacle_radius
+        max_x = wall_limits.max_x - obstacle_radius
+        min_y = wall_limits.min_y + obstacle_radius
+        max_y = wall_limits.max_y - obstacle_radius
+
+        if min_x >= max_x or min_y >= max_y:
+            return positions
+
+        max_attempts_per_obstacle = 200
+
+        for _ in range(num_obstacles):
+            found_valid_position = False
+
+            for _attempt in range(max_attempts_per_obstacle):
+                candidate = np.array(
+                    np_random.normal(loc=center, scale=self.config.gaussian_std),
+                    dtype=np.float64,
+                )
+
+                if candidate[0] < min_x or candidate[0] > max_x:
+                    continue
+                if candidate[1] < min_y or candidate[1] > max_y:
+                    continue
+
                 if not world.wall_collision_checker.is_position_valid(
                     obstacle_radius,
                     world.contact_margin,

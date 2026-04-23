@@ -6,7 +6,10 @@ from pydantic import BaseModel, Field
 
 from contgrid.core.typing import Position
 
-from .spawn_strategies import SpawnMethodConfig, UniformRandomConfig
+from .spawn_strategies import (
+    SpawnMethodConfig,
+    UniformRandomConfig,
+)
 
 
 class RewardConfig(BaseModel):

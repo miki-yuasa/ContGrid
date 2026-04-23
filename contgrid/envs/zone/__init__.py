@@ -16,6 +16,8 @@ from .scenario import ZoneScenario
 from .spawn_strategies import (
     FixedSpawnConfig,
     FixedSpawnStrategy,
+    GaussianSpawnConfig,
+    GaussianSpawnStrategy,
     SpawnMode,
     SpawnStrategy,
     UniformRandomConfig,
@@ -30,6 +32,7 @@ __all__ = [
     "ZoneScenarioConfig",
     "SpawnConfig",
     "SpawnMode",
+    "GaussianSpawnConfig",
     "UniformRandomConfig",
     # Environment
     "ZoneEnv",
@@ -41,5 +44,6 @@ __all__ = [
     # Spawn strategies
     "SpawnStrategy",
     "FixedSpawnStrategy",
+    "GaussianSpawnStrategy",
     "UniformRandomSpawnStrategy",
 ]
