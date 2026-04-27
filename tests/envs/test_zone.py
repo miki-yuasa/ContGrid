@@ -136,7 +136,7 @@ class TestGaussianSpawnStrategy:
             black_zone=[ObjConfig(pos=None) for _ in range(num_zones)],
             zone_size=zone_size,
             agent_size=agent_size,
-            spawn_method=GaussianSpawnConfig(gaussian_std=1.2, min_spacing=min_spacing),
+            spawn_method=GaussianSpawnConfig(gaussian_std=2, min_spacing=min_spacing),
         )
 
         scenario_config = ZoneScenarioConfig(spawn_config=spawn_config)
