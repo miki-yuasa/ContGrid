@@ -12,8 +12,8 @@ from contgrid.core import World
 from contgrid.core.typing import Position
 
 if TYPE_CHECKING:
-    from .configs import ObjConfig
-    from .scenario import ZoneScenario
+    from ..configs import ObjConfig
+    from ..scenario import ZoneScenario
 
 
 class SpawnMode(str, Enum):

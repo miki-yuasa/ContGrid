@@ -27,7 +27,7 @@ from .observations import (
     VisitCountObsFactory,
     ZoneDistObsFactory,
 )
-from .spawn_strategies import (
+from .spawn import (
     FixedSpawnConfig,
     FixedSpawnStrategy,
     GaussianSpawnConfig,

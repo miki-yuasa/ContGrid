@@ -6,10 +6,7 @@ from pydantic import BaseModel, Field
 
 from contgrid.core.typing import Position
 
-from .spawn_strategies import (
-    SpawnMethodConfig,
-    UniformRandomConfig,
-)
+from .spawn import SpawnMethodConfig, UniformRandomConfig
 
 
 class RewardConfig(BaseModel):
@@ -99,7 +96,9 @@ class SpawnConfig(BaseModel):
 
 class ObsConfig(BaseModel):
     """Configuration for observations."""
+
     include_subtask: bool = False
+
 
 class ZoneScenarioConfig(BaseModel):
     """Configuration for the Rooms scenario."""
