@@ -72,7 +72,7 @@ class TestUniformRandomSpawnStrategy:
 
                 scenario = cast(ZoneScenario, env.scenario)
 
-                strategy = scenario.spawn_strategy
+                strategy = scenario.spawn_manager.spawn_strategy
                 assert isinstance(strategy, UniformRandomSpawnStrategy)
 
                 zone_positions_by_color = {
@@ -170,7 +170,7 @@ class TestGaussianSpawnStrategy:
                 assert image_path.exists()
 
                 scenario = cast(ZoneScenario, env.scenario)
-                strategy = scenario.spawn_strategy
+                strategy = scenario.spawn_manager.spawn_strategy
                 assert isinstance(strategy, GaussianSpawnStrategy)
 
                 zone_positions_by_color = {

@@ -4,7 +4,6 @@ from typing import Any
 
 import numpy as np
 from gymnasium import spaces
-from matplotlib.pylab import Generator
 from numpy.typing import NDArray
 
 from contgrid.core import (
@@ -27,15 +26,7 @@ from .observations import (
     VisitCountObsFactory,
     ZoneDistObsFactory,
 )
-from .spawn import (
-    FixedSpawnConfig,
-    FixedSpawnStrategy,
-    GaussianSpawnConfig,
-    GaussianSpawnStrategy,
-    SpawnStrategy,
-    UniformRandomConfig,
-    UniformRandomSpawnStrategy,
-)
+from .spawn import FixedSpawnConfig, SpawnManager
 
 
 class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64]]]):
@@ -53,7 +44,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             else config.spawn_config.zone_thr_dist
         )
 
-        self.spawn_strategy = self._create_spawn_strategy()
+        self.spawn_manager = SpawnManager(config.spawn_config)
 
         # self.room_scale: float = max(
         #     self.world_config.grid.width, self.world_config.grid.height
@@ -137,27 +128,6 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
 
         return config
 
-    def _create_spawn_strategy(self) -> SpawnStrategy:
-        """Factory method to create appropriate spawn strategy."""
-        assert self.config
-        method_config = self.config.spawn_config.spawn_method
-
-        strategy_map = {
-            FixedSpawnConfig: FixedSpawnStrategy,
-            GaussianSpawnConfig: GaussianSpawnStrategy,
-            UniformRandomConfig: UniformRandomSpawnStrategy,
-        }
-
-        for config_type, strategy_class in strategy_map.items():
-            if isinstance(method_config, config_type):
-                return (
-                    strategy_class()
-                    if config_type == FixedSpawnConfig
-                    else strategy_class(method_config)
-                )
-
-        raise ValueError(f"Unknown spawn method config: {type(method_config)}")
-
     def init_agents(self, world: World, np_random=None) -> list[Agent]:
         assert self.config
         agent = Agent(
@@ -189,7 +159,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                     if config.pos is None
                     else np.array(config.pos, dtype=np.float64)
                 ),
-                reset_config=ResetConfig(spawn_pos=self._format_spawn_pos(config.pos)),
+                reset_config=ResetConfig(
+                    spawn_pos=self.spawn_manager.format_spawn_pos(config.pos)
+                ),
             )
             for i, config in enumerate(self.config.spawn_config.yellow_zone)
         ]
@@ -204,7 +176,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                     if config.pos is None
                     else np.array(config.pos, dtype=np.float64)
                 ),
-                reset_config=ResetConfig(spawn_pos=self._format_spawn_pos(config.pos)),
+                reset_config=ResetConfig(
+                    spawn_pos=self.spawn_manager.format_spawn_pos(config.pos)
+                ),
             )
             for i, config in enumerate(self.config.spawn_config.red_zone)
         ]
@@ -219,7 +193,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                     if config.pos is None
                     else np.array(config.pos, dtype=np.float64)
                 ),
-                reset_config=ResetConfig(spawn_pos=self._format_spawn_pos(config.pos)),
+                reset_config=ResetConfig(
+                    spawn_pos=self.spawn_manager.format_spawn_pos(config.pos)
+                ),
             )
             for i, config in enumerate(self.config.spawn_config.white_zone)
         ]
@@ -234,27 +210,16 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                     if config.pos is None
                     else np.array(config.pos, dtype=np.float64)
                 ),
-                reset_config=ResetConfig(spawn_pos=self._format_spawn_pos(config.pos)),
+                reset_config=ResetConfig(
+                    spawn_pos=self.spawn_manager.format_spawn_pos(config.pos)
+                ),
             )
             for i, config in enumerate(self.config.spawn_config.black_zone)
         ]
 
         return self.yellow + self.red + self.white + self.black
 
-    def _format_spawn_pos(
-        self, spawn_pos: SpawnPos
-    ) -> Position | list[Position] | None:
-        match spawn_pos:
-            case list():
-                return [(float(pos[0]), float(pos[1])) for pos in spawn_pos]
-            case tuple():
-                return (float(spawn_pos[0]), float(spawn_pos[1]))
-            case None:
-                return None
-            case _:
-                raise ValueError("Invalid spawn_pos type")
-
-    def reset_world(self, world: World, np_random: Generator) -> None:
+    def reset_world(self, world: World, np_random: np.random.Generator) -> None:
         """Reset the world, ensuring agents are reset before landmarks.
 
         This override is necessary because obstacle spawning strategies need
@@ -267,7 +232,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         world.landmarks = self.reset_landmarks(world, np_random)
         self._post_reset_world(world, np_random)
 
-    def _pre_reset_world(self, world: World, np_random: Generator) -> None:
+    def _pre_reset_world(self, world: World, np_random: np.random.Generator) -> None:
         """Pre-reset initialization: prepare free_cells list and remove fixed obstacle positions."""
         assert self.config
         if not hasattr(self, "init_free_cells"):
@@ -310,9 +275,19 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         agent_pos = world.agents[0].state.pos if world.agents else None
 
         # Spawn obstacles using strategy pattern
-        self._spawn_obstacles(world, np_random, agent_pos)
+        zone_positions = self.spawn_manager.spawn_obstacles(
+            scenario=self,
+            world=world,
+            np_random=np_random,
+            agent_pos=agent_pos,
+        )
 
         # Store positions for observations
+        self.yellow_pos = zone_positions["yellow"]
+        self.red_pos = zone_positions["red"]
+        self.white_pos = zone_positions["white"]
+        self.black_pos = zone_positions["black"]
+
         self.wall_pos = np.array(
             world.wall_collision_checker.wall_centers, dtype=np.float64
         )
@@ -321,161 +296,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
 
         return world.landmarks
 
-    def _spawn_obstacles(
-        self,
-        world: World,
-        np_random: np.random.Generator,
-        agent_pos: NDArray[np.float64] | None,
-    ) -> None:
-        """Spawn all obstacles (lavas and holes) using the configured strategy."""
-        assert self.config
-        max_spawn_attempts = 100
-
-        spawn_specs = [
-            ("yellow", self.yellow, self.config.spawn_config.yellow_zone),
-            ("red", self.red, self.config.spawn_config.red_zone),
-            ("white", self.white, self.config.spawn_config.white_zone),
-            ("black", self.black, self.config.spawn_config.black_zone),
-        ]
-
-        if isinstance(self.spawn_strategy, GaussianSpawnStrategy):
-            flat_zones = []
-            for color_type, obstacles, configs in spawn_specs:
-                for i, (landmark, config) in enumerate(zip(obstacles, configs)):
-                    flat_zones.append((color_type, landmark, config))
-            flat_zones_shuffled = [
-                flat_zones[idx] for idx in np_random.permutation(len(flat_zones))
-            ]
-            spawned_positions: dict[str, list[Position]] = {
-                "yellow": [],
-                "red": [],
-                "white": [],
-                "black": [],
-            }
-            for color_type, landmark, config in flat_zones_shuffled:
-                positions = self.spawn_strategy.spawn_obstacles(
-                    num_obstacles=1,
-                    obstacle_type=color_type,
-                    world=world,
-                    scenario=self,
-                    np_random=np_random,
-                    agent_pos=agent_pos,
-                    obstacle_configs=[config],
-                )
-                if positions:
-                    pos_array = np.array(positions[0], dtype=np.float64)
-                    landmark.state.pos = pos_array
-                    spawned_positions[color_type].append(positions[0])
-                    self._spawned_zone_positions[color_type].append(pos_array)
-                    self._all_spawned_positions.append(pos_array)
-        else:
-            spawned_positions: dict[str, list[Position]] = {}
-            for obstacle_type, obstacles, obstacle_configs in spawn_specs:
-                positions = self._spawn_obstacle_type(
-                    obstacle_type=obstacle_type,
-                    obstacles=obstacles,
-                    obstacle_configs=obstacle_configs,
-                    world=world,
-                    np_random=np_random,
-                    agent_pos=agent_pos,
-                    max_attempts=max_spawn_attempts,
-                )
-                spawned_positions[obstacle_type] = positions
-                self._spawned_zone_positions[obstacle_type] = [
-                    np.array(pos, dtype=np.float64) for pos in positions
-                ]
-                self._all_spawned_positions.extend(
-                    [np.array(pos, dtype=np.float64) for pos in positions]
-                )
-
-        # Store for observations
-        self.yellow_pos = np.array(spawned_positions["yellow"], dtype=np.float64)
-        self.red_pos = np.array(spawned_positions["red"], dtype=np.float64)
-        self.white_pos = np.array(spawned_positions["white"], dtype=np.float64)
-        self.black_pos = np.array(spawned_positions["black"], dtype=np.float64)
-
-    def _spawn_obstacle_type(
-        self,
-        obstacle_type: str,
-        obstacles: list[Landmark],
-        obstacle_configs: list,
-        world: World,
-        np_random: np.random.Generator,
-        agent_pos: NDArray[np.float64] | None,
-        max_attempts: int,
-    ) -> list[Position]:
-        """Spawn a specific type of obstacle with fallback strategy."""
-        assert self.config
-
-        # Try spawning with configured strategy
-        positions: list[Position] = []
-        for _ in range(max_attempts):
-            positions = self.spawn_strategy.spawn_obstacles(
-                num_obstacles=len(obstacles),
-                obstacle_type=obstacle_type,
-                world=world,
-                scenario=self,
-                np_random=np_random,
-                agent_pos=agent_pos,
-                obstacle_configs=obstacle_configs,
-            )
-            if len(obstacles) == len(positions):
-                break
-
-        # Fallback to uniform random sampling if needed
-        if len(positions) < len(obstacles):
-            fallback_strategy = UniformRandomSpawnStrategy(
-                UniformRandomConfig(min_spacing=0.9)
-            )
-            remaining_configs = obstacle_configs[len(positions) :]
-            additional_positions = fallback_strategy.spawn_obstacles(
-                num_obstacles=len(obstacles) - len(positions),
-                obstacle_type=obstacle_type,
-                world=world,
-                scenario=self,
-                np_random=np_random,
-                agent_pos=agent_pos,
-                obstacle_configs=remaining_configs,
-            )
-            positions.extend(additional_positions)
-
-        # Update obstacle positions with safety check for agent distance
-        obstacle_radius = self.config.spawn_config.zone_size
-        agent_radius = self.config.spawn_config.agent_size
-        min_agent_distance = obstacle_radius + agent_radius
-
-        valid_positions: list[Position] = []
-        for i, pos in enumerate(positions):
-            if i < len(obstacles):
-                pos_array = np.array(pos, dtype=np.float64)
-                position_is_valid = True
-
-                # Verify distance from agent and re-spawn if too close
-                if agent_pos is not None:
-                    dist = np.linalg.norm(pos_array - agent_pos)
-                    if dist < min_agent_distance:
-                        # Find a position that's far enough from agent
-                        found_valid_cell = False
-                        for cell in self.free_cells:
-                            cell_dist = np.linalg.norm(np.array(cell) - agent_pos)
-                            if cell_dist >= min_agent_distance:
-                                pos_array = np.array(cell, dtype=np.float64)
-                                if cell in self.free_cells:
-                                    self.free_cells.remove(cell)
-                                found_valid_cell = True
-                                break
-
-                        if not found_valid_cell:
-                            # Could not find a valid position - skip this obstacle
-                            position_is_valid = False
-
-                if position_is_valid:
-                    obstacles[i].state.pos = pos_array
-                    valid_positions.append(tuple(pos_array))
-
-        return valid_positions
-
-    def _post_reset_world(self, world: World, np_random: Generator) -> None:
+    def _post_reset_world(self, world: World, np_random: np.random.Generator) -> None:
         """Post-reset: find and cache closest obstacles to the agent."""
         agent = world.agents[0]
         self.closest_yellow_pos = self._find_closest_obstacle(
@@ -565,29 +386,13 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
 
     @classmethod
     def _choose_new_pos(
-        cls, spawn_pos: SpawnPos, free_cells: list[CellPosition], np_random: Generator
+        cls,
+        spawn_pos: SpawnPos,
+        free_cells: list[CellPosition],
+        np_random: np.random.Generator,
     ) -> Position:
-        new_pos: Position
-        match spawn_pos:
-            case tuple() as pos:
-                new_pos = (pos[0], pos[1])
-            case list() as pos_list if pos_list:
-                cell_pos_list: list[CellPosition] = pos_list  # type: ignore
-                available_pos: list[CellPosition] = list(
-                    set(cell_pos_list) & set(free_cells)
-                )
-                if available_pos:
-                    chose_cell_idx = np_random.choice(len(available_pos))
-                    new_pos = available_pos[chose_cell_idx]
-                else:
-                    chose_cell_idx = np_random.choice(len(free_cells))
-                    new_pos = free_cells[chose_cell_idx]
-            case None:
-                chose_cell_idx = np_random.choice(len(free_cells))
-                new_pos = free_cells[chose_cell_idx]
-            case _:
-                raise ValueError("Invalid spawn_pos type")
-        return new_pos
+        """Delegate to SpawnManager.choose_new_pos."""
+        return SpawnManager.choose_new_pos(spawn_pos, free_cells, np_random)
 
     def get_closest(
         self, pos: NDArray[np.float64], objects: NDArray[np.float64]
@@ -611,9 +416,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         obs |= self.black_dist_obs_factory.observation(agent, self.black_pos)
         obs |= self.visit_count_obs_factory.observation(agent, self._get_visit_counts())
         if self.config.obs_config.include_subtask:
-            obs |= self.subtask_obs_factory.observation(
-                agent, self.current_subtask_idx
-            )
+            obs |= self.subtask_obs_factory.observation(agent, self.current_subtask_idx)
         return obs
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:

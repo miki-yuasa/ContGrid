@@ -13,11 +13,12 @@ from .env import (
     ZoneEnvConfig,
 )
 from .scenario import ZoneScenario
-from .spawn_strategies import (
+from .spawn import (
     FixedSpawnConfig,
     FixedSpawnStrategy,
     GaussianSpawnConfig,
     GaussianSpawnStrategy,
+    SpawnManager,
     SpawnMode,
     SpawnStrategy,
     UniformRandomConfig,
@@ -41,9 +42,11 @@ __all__ = [
     "DEFAULT_WORLD_CONFIG",
     # Scenario
     "ZoneScenario",
-    # Spawn strategies
+    # Spawn
+    "SpawnManager",
     "SpawnStrategy",
     "FixedSpawnStrategy",
     "GaussianSpawnStrategy",
     "UniformRandomSpawnStrategy",
 ]
+
