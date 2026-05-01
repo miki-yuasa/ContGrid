@@ -22,7 +22,11 @@ from contgrid.core import (
 from contgrid.core.typing import CellPosition, Position
 
 from .configs import ZoneScenarioConfig, ZoneType
-from .observations import VisitCountObsFactory, ZoneDistObsFactory
+from .observations import (
+    SubtaskObsFactory,
+    VisitCountObsFactory,
+    ZoneDistObsFactory,
+)
 from .spawn_strategies import (
     FixedSpawnConfig,
     FixedSpawnStrategy,
@@ -69,6 +73,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             room_scale=self.room_scale, name="black_dist"
         )
         self.visit_count_obs_factory = VisitCountObsFactory()
+        self.subtask_obs_factory = SubtaskObsFactory()
 
         self.yellow_visit_count: int = 0
         self.red_visit_count: int = 0
@@ -605,6 +610,10 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         obs |= self.white_dist_obs_factory.observation(agent, self.white_pos)
         obs |= self.black_dist_obs_factory.observation(agent, self.black_pos)
         obs |= self.visit_count_obs_factory.observation(agent, self._get_visit_counts())
+        if self.config.obs_config.include_subtask:
+            obs |= self.subtask_obs_factory.observation(
+                agent, self.current_subtask_idx
+            )
         return obs
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
@@ -648,6 +657,12 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             high_bound=rel_high_bound,
         )
         obs_space_dict |= self.visit_count_obs_factory.obs_space_dict()
+
+        if self.config.obs_config.include_subtask:
+            obs_space_dict |= self.subtask_obs_factory.obs_space_dict(
+                num_subtasks=len(self.config.spawn_config.subtask_seq)
+            )
+
         return spaces.Dict(obs_space_dict)
 
     def reward(self, agent: Agent, world: World) -> float:

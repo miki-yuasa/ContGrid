@@ -70,3 +70,24 @@ class VisitCountObsFactory(BaseObsFactory):
         # Clip visitation counts to 1 to indicate whether the agent has visited each zone at least once
         visitation_counts = np.clip(visitation_counts, 0, 1).astype(np.int32)
         return {self.name: visitation_counts}
+
+class SubtaskObsFactory(BaseObsFactory):
+    """
+    Factory for the current subtask ID which the agent needs to complete.
+    """
+    def __init__(
+        self, 
+        name: str = "subtask",
+    ):
+        self.name = name
+
+    def obs_space_dict(self, num_subtasks: int) -> dict[str, spaces.Space]:
+        return {self.name: spaces.Discrete(num_subtasks)}
+
+    def observation(
+        self,
+        agent: Agent,
+        subtask_id: int,
+    ) -> dict[str, NDArray[np.int32]]:
+        return {self.name: np.array(subtask_id, dtype=np.int32)}
+        

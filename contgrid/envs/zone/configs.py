@@ -97,8 +97,13 @@ class SpawnConfig(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
+class ObsConfig(BaseModel):
+    """Configuration for observations."""
+    include_subtask: bool = False
+
 class ZoneScenarioConfig(BaseModel):
     """Configuration for the Rooms scenario."""
 
     spawn_config: SpawnConfig = SpawnConfig()
     reward_config: RewardConfig = RewardConfig(step_penalty=0.01)
+    obs_config: ObsConfig = ObsConfig()
