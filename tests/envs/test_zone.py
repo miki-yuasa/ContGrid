@@ -294,3 +294,64 @@ class TestGaussianSpawnStrategy:
                 assert video_path.exists()
         finally:
             env.close()
+
+    def test_no_observation_warnings(self):
+        """Test that env reset and step do not emit numpy.ndarray type warnings for discrete spaces."""
+        import warnings
+        from contgrid.envs.zone.configs import ObsConfig, SubtaskConfig, ZoneType
+
+        spawn_config = SpawnConfig(
+            agent=None,
+            subtask_seq=[
+                SubtaskConfig(
+                    goal=ZoneType.YELLOW,
+                    obstacle=ZoneType.WHITE,
+                    reward=50.0,
+                    penalty=-1.0,
+                )
+            ],
+            yellow_zone=[ObjConfig(pos=None)],
+            red_zone=[ObjConfig(pos=None)],
+            white_zone=[ObjConfig(pos=None)],
+            black_zone=[ObjConfig(pos=None)],
+            zone_size=0.5,
+            agent_size=0.1,
+            spawn_method=UniformRandomConfig(min_spacing=1.5),
+        )
+
+        scenario_config = ZoneScenarioConfig(
+            spawn_config=spawn_config,
+            obs_config=ObsConfig(include_subtask=True),
+        )
+        world_config = WorldConfig(
+            grid=Grid(
+                layout=[
+                    "############",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "############",
+                ]
+            )
+        )
+
+        env = ZoneEnv(scenario_config=scenario_config, world_config=world_config)
+        try:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                env.reset(seed=42)
+                for _ in range(5):
+                    action = env.action_space.sample()
+                    env.step(action)
+
+                for warning in w:
+                    assert "should be an int or np.int64, actual type: <class 'numpy.ndarray'>" not in str(warning.message)
+        finally:
+            env.close()

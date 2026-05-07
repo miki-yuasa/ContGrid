@@ -88,6 +88,6 @@ class SubtaskObsFactory(BaseObsFactory):
         self,
         agent: Agent,
         subtask_id: int,
-    ) -> dict[str, NDArray[np.int32]]:
-        return {self.name: np.array(subtask_id, dtype=np.int32)}
+    ) -> dict[str, np.int64]:
+        return {self.name: np.int64(subtask_id)}
         
