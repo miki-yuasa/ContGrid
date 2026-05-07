@@ -22,7 +22,7 @@ class TestUniformRandomSpawnStrategy:
     def test_uniform_random_spawn(self):
         """Uniform random spawning keeps spacing, wall validity, and agent clearance."""
         min_spacing = 1.5
-        num_zones = 2
+        num_zones = 6
         zone_size = 0.5
         agent_size = 0.1
         output_dir = Path("tests") / "out" / "zone" / "uniform_random_spawn"
@@ -120,23 +120,29 @@ class TestUniformRandomSpawnStrategy:
 class TestGaussianSpawnStrategy:
     def test_gaussian_spawn(self):
         """Gaussian spawning stays valid and concentrates around the map center."""
-        num_zones = 2
+        num_yellow_zones = 2
+        num_red_zones = 8
+        num_white_zones = 2
+        num_black_zones = 2
         zone_size = 0.5
         agent_size = 0.1
-        min_spacing = 1.5  # Reduced from 1.25 for practical feasibility
+        min_spacing = 1.1  # Reduced from 1.25 for practical feasibility
+        gaussian_std = 2
         output_dir = Path("tests") / "out" / "zone" / "gaussian_spawn"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         spawn_config = SpawnConfig(
             agent=None,
             subtask_seq=[],
-            yellow_zone=[ObjConfig(pos=None) for _ in range(num_zones)],
-            red_zone=[ObjConfig(pos=None) for _ in range(num_zones)],
-            white_zone=[ObjConfig(pos=None) for _ in range(num_zones)],
-            black_zone=[ObjConfig(pos=None) for _ in range(num_zones)],
+            yellow_zone=[ObjConfig(pos=None) for _ in range(num_yellow_zones)],
+            red_zone=[ObjConfig(pos=None) for _ in range(num_red_zones)],
+            white_zone=[ObjConfig(pos=None) for _ in range(num_white_zones)],
+            black_zone=[ObjConfig(pos=None) for _ in range(num_black_zones)],
             zone_size=zone_size,
             agent_size=agent_size,
-            spawn_method=GaussianSpawnConfig(gaussian_std=2, min_spacing=min_spacing),
+            spawn_method=GaussianSpawnConfig(
+                gaussian_std=gaussian_std, min_spacing=min_spacing
+            ),
         )
 
         scenario_config = ZoneScenarioConfig(spawn_config=spawn_config)
@@ -179,10 +185,19 @@ class TestGaussianSpawnStrategy:
                     "white": scenario.white_pos,
                     "black": scenario.black_pos,
                 }
+                num_zones_list = [
+                    num_yellow_zones,
+                    num_red_zones,
+                    num_white_zones,
+                    num_black_zones,
+                ]
 
                 # Each color should have at least 4 zones (allow for some spawning failures)
                 all_zone_positions: list[np.ndarray] = []
-                for color, color_positions in zone_positions_by_color.items():
+                for color, num_zones in zip(
+                    zone_positions_by_color.keys(), num_zones_list
+                ):
+                    color_positions = zone_positions_by_color[color]
                     assert len(color_positions) == num_zones, (
                         f"{color} has only {len(color_positions)} zones"
                     )
