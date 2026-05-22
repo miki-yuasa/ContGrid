@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal, override
 
 import numpy as np
 from numpy.typing import NDArray
@@ -221,7 +221,7 @@ class UniformRandomSpawnStrategy(SpawnStrategy):
         positions: list[Position] = []
         position_arrays: list[NDArray[np.float64]] = []
 
-        obstacle_radius = scenario.config.spawn_config.zone_size
+        obstacle_radius = getattr(scenario.zone_sizes, obstacle_type)
         agent_radius = scenario.config.spawn_config.agent_size
         min_agent_distance = obstacle_radius + agent_radius
         existing_zone_positions = self._get_existing_zone_positions(
@@ -325,7 +325,7 @@ class GaussianSpawnStrategy(SpawnStrategy):
         positions: list[Position] = []
         position_arrays: list[NDArray[np.float64]] = []
 
-        obstacle_radius = scenario.config.spawn_config.zone_size
+        obstacle_radius = getattr(scenario.zone_sizes, obstacle_type)
         agent_radius = scenario.config.spawn_config.agent_size
         min_agent_distance = obstacle_radius + agent_radius
         existing_zone_positions = self._get_existing_zone_positions(
@@ -445,7 +445,7 @@ class FixedRandomSwapSpawnStrategy(SpawnStrategy):
         np_random: np.random.Generator,
     ) -> dict[str, list[Position]]:
         """Apply random swaps and overlap removal after fixed spawning."""
-        zone_landmarks: dict[str, list] = {
+        zone_landmarks: dict[str, list[Any]] = {
             "yellow": list(scenario.yellow),
             "red": list(scenario.red),
             "white": list(scenario.white),

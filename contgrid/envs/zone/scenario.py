@@ -39,24 +39,34 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         world_config: WorldConfig,
     ) -> None:
         super().__init__(config, world_config)
+        if isinstance(config.spawn_config.zone_size, ZoneSizeConfig):
+            self.zone_sizes: ZoneSizeConfig = config.spawn_config.zone_size
+        else:
+            self.zone_sizes = ZoneSizeConfig(
+                yellow=config.spawn_config.zone_size,
+                red=config.spawn_config.zone_size,
+                white=config.spawn_config.zone_size,
+                black=config.spawn_config.zone_size,
+            )
+
         self.zone_thr_dist: dict[str, float] = {
             "yellow": (
-                (config.spawn_config.zone_size.yellow + config.spawn_config.agent_size)
+                (self.zone_sizes.yellow + config.spawn_config.agent_size)
                 if config.spawn_config.zone_thr_dist is None
                 else config.spawn_config.zone_thr_dist
             ),
             "red": (
-                (config.spawn_config.zone_size.red + config.spawn_config.agent_size)
+                (self.zone_sizes.red + config.spawn_config.agent_size)
                 if config.spawn_config.zone_thr_dist is None
                 else config.spawn_config.zone_thr_dist
             ),
             "white": (
-                (config.spawn_config.zone_size.white + config.spawn_config.agent_size)
+                (self.zone_sizes.white + config.spawn_config.agent_size)
                 if config.spawn_config.zone_thr_dist is None
                 else config.spawn_config.zone_thr_dist
             ),
             "black": (
-                (config.spawn_config.zone_size.black + config.spawn_config.agent_size)
+                (self.zone_sizes.black + config.spawn_config.agent_size)
                 if config.spawn_config.zone_thr_dist is None
                 else config.spawn_config.zone_thr_dist
             ),
@@ -167,16 +177,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         # These will be updated during spawning
         default_pos = np.array([0.0, 0.0], dtype=np.float64)
 
-        if isinstance(self.config.spawn_config.zone_size, ZoneSizeConfig):
-            zone_sizes = self.config.spawn_config.zone_size
-        else:
-            zone_sizes = ZoneSizeConfig(
-                yellow=self.config.spawn_config.zone_size,
-                red=self.config.spawn_config.zone_size,
-                white=self.config.spawn_config.zone_size,
-                black=self.config.spawn_config.zone_size,
-            )
-        self.zone_sizes: ZoneSizeConfig = zone_sizes
+        zone_sizes = self.zone_sizes
 
         self.yellow = [
             Landmark(
@@ -258,7 +259,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self._init_white = list(self.white)
         self._init_black = list(self.black)
         # Save original properties since post_spawn may mutate landmark objects
-        self._init_landmark_props: dict[int, tuple[str, float, object]] = {}
+        self._init_landmark_props: dict[int, tuple[str, float, Color]] = {}
         for lm in self._init_yellow + self._init_red + self._init_white + self._init_black:
             self._init_landmark_props[id(lm)] = (lm.name, lm.size, lm.color)
 
@@ -332,7 +333,12 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self, world: World, np_random: np.random.Generator
     ) -> list[Landmark]:
         """Reset landmarks using the configured spawn strategy."""
-        agent_pos = world.agents[0].state.pos if world.agents else None
+        if self.config.spawn_config.reset_agent_first:
+            agent_pos = world.agents[0].state.pos if world.agents else None
+        elif self.config.spawn_config.agent is not None:
+            agent_pos = np.array(self.config.spawn_config.agent, dtype=np.float64)
+        else:
+            agent_pos = None
 
         # Spawn obstacles using strategy pattern
         zone_positions = self.spawn_manager.spawn_obstacles(
