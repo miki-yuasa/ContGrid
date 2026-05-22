@@ -1,9 +1,12 @@
 from .spawn_manager import SpawnManager
 from .spawn_strategies import (
+    FixedRandomSwapSpawnConfig,
+    FixedRandomSwapSpawnStrategy,
     FixedSpawnConfig,
     FixedSpawnStrategy,
     GaussianSpawnConfig,
     GaussianSpawnStrategy,
+    RandomSwapSpec,
     SpawnMethodConfig,
     SpawnMode,
     SpawnStrategy,
@@ -16,13 +19,16 @@ __all__ = [
     "SpawnManager",
 
     # Configs
+    "FixedRandomSwapSpawnConfig",
     "FixedSpawnConfig",
     "GaussianSpawnConfig",
+    "RandomSwapSpec",
     "SpawnMethodConfig",
     "SpawnMode",
     "UniformRandomConfig",
 
     # Strategies
+    "FixedRandomSwapSpawnStrategy",
     "FixedSpawnStrategy",
     "GaussianSpawnStrategy",
     "SpawnStrategy",

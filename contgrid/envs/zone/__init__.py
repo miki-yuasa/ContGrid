@@ -15,10 +15,13 @@ from .env import (
 )
 from .scenario import ZoneScenario
 from .spawn import (
+    FixedRandomSwapSpawnConfig,
+    FixedRandomSwapSpawnStrategy,
     FixedSpawnConfig,
     FixedSpawnStrategy,
     GaussianSpawnConfig,
     GaussianSpawnStrategy,
+    RandomSwapSpec,
     SpawnManager,
     SpawnMode,
     SpawnStrategy,
@@ -28,8 +31,10 @@ from .spawn import (
 
 __all__ = [
     # Config classes
+    "FixedRandomSwapSpawnConfig",
     "FixedSpawnConfig",
     "ObjConfig",
+    "RandomSwapSpec",
     "RewardConfig",
     "ZoneScenarioConfig",
     "ZoneSizeConfig",
@@ -47,6 +52,7 @@ __all__ = [
     # Spawn
     "SpawnManager",
     "SpawnStrategy",
+    "FixedRandomSwapSpawnStrategy",
     "FixedSpawnStrategy",
     "GaussianSpawnStrategy",
     "UniformRandomSpawnStrategy",

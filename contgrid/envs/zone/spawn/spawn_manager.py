@@ -15,6 +15,8 @@ from contgrid.core import Landmark, SpawnPos, World
 from contgrid.core.typing import CellPosition, Position
 
 from .spawn_strategies import (
+    FixedRandomSwapSpawnConfig,
+    FixedRandomSwapSpawnStrategy,
     FixedSpawnConfig,
     FixedSpawnStrategy,
     GaussianSpawnConfig,
@@ -39,12 +41,19 @@ class SpawnManager:
         self.spawn_config = spawn_config
         self.spawn_strategy = self._create_spawn_strategy()
 
+        self.fill_missing_obstacles: bool = (
+            False
+            if isinstance(self.spawn_strategy, FixedRandomSwapSpawnStrategy)
+            else True
+        )
+
     def _create_spawn_strategy(self) -> SpawnStrategy:
         """Factory method to create appropriate spawn strategy."""
         method_config = self.spawn_config.spawn_method
 
         strategy_map = {
             FixedSpawnConfig: FixedSpawnStrategy,
+            FixedRandomSwapSpawnConfig: FixedRandomSwapSpawnStrategy,
             GaussianSpawnConfig: GaussianSpawnStrategy,
             UniformRandomConfig: UniformRandomSpawnStrategy,
         }
@@ -179,8 +188,18 @@ class SpawnManager:
                     [np.array(pos, dtype=np.float64) for pos in positions]
                 )
 
+        # Apply post-spawn transformations (swaps + overlap removal)
+        if isinstance(self.spawn_strategy, FixedRandomSwapSpawnStrategy):
+            spawned_positions = self.spawn_strategy.post_spawn(
+                scenario=scenario,
+                spawned_positions=spawned_positions,
+                np_random=np_random,
+            )
+
         return {
             color: np.array(pos_list, dtype=np.float64)
+            if pos_list
+            else np.empty((0, 2), dtype=np.float64)
             for color, pos_list in spawned_positions.items()
         }
 
@@ -212,7 +231,7 @@ class SpawnManager:
                 break
 
         # Fallback to uniform random sampling if needed
-        if len(positions) < len(obstacles):
+        if self.fill_missing_obstacles and len(positions) < len(obstacles):
             fallback_strategy = UniformRandomSpawnStrategy(
                 UniformRandomConfig(min_spacing=0.9)
             )

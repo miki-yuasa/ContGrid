@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, Discriminator
+from pydantic import BaseModel, Discriminator, Field
 
 from contgrid.core import World
 from contgrid.core.typing import Position
@@ -20,6 +20,7 @@ class SpawnMode(str, Enum):
     """Enumeration of available obstacle spawning methods."""
 
     FIXED = "fixed"
+    FIXED_RANDOM_SWAP = "fixed_random_swap"
     GAUSSIAN = "gaussian"
     UNIFORM_RANDOM = "uniform_random"
 
@@ -45,9 +46,39 @@ class FixedSpawnConfig(BaseModel):
     mode: Literal[SpawnMode.FIXED] = SpawnMode.FIXED
 
 
+class RandomSwapSpec(BaseModel):
+    """Specification for one random-swap operation.
+
+    Randomly selects ``num_swaps`` positions from the fixed positions of
+    ``source_zone`` and spawns ``target_zone`` landmarks there, removing the
+    corresponding ``source_zone`` landmarks.
+    """
+
+    source_zone: str
+    target_zone: str
+    num_swaps: int = 1
+
+
+class FixedRandomSwapSpawnConfig(BaseModel):
+    """Configuration for fixed spawning with random zone swaps and overlap removal.
+
+    Extends fixed spawning by:
+    1. Randomly placing ``target_zone`` landmarks at positions drawn from
+       ``source_zone``'s fixed locations (and removing the displaced source landmarks).
+    2. Removing any zone of type ``a`` that overlaps with a zone of type ``b``
+       for each ``(a, b)`` pair in ``remove_overlapping``.
+    """
+
+    mode: Literal[SpawnMode.FIXED_RANDOM_SWAP] = SpawnMode.FIXED_RANDOM_SWAP
+    swaps: list[RandomSwapSpec] = Field(default_factory=list)
+
+
 # Union type for all spawn method configs with discriminator
 SpawnMethodConfig = Annotated[
-    GaussianSpawnConfig | UniformRandomConfig | FixedSpawnConfig,
+    GaussianSpawnConfig
+    | UniformRandomConfig
+    | FixedSpawnConfig
+    | FixedRandomSwapSpawnConfig,
     Discriminator("mode"),
 ]
 
@@ -367,3 +398,109 @@ class GaussianSpawnStrategy(SpawnStrategy):
                 break
 
         return positions
+
+
+class FixedRandomSwapSpawnStrategy(SpawnStrategy):
+    """Fixed spawning with random zone swaps and overlap removal.
+
+    1. Delegates to ``FixedSpawnStrategy`` to place all zones at configured positions.
+    2. For each :class:`RandomSwapSpec`: randomly selects source-zone positions,
+       creates target-zone landmarks there, and removes the displaced source landmarks.
+
+    """
+
+    def __init__(self, config: FixedRandomSwapSpawnConfig) -> None:
+        self.config = config
+        self._fixed_strategy = FixedSpawnStrategy()
+
+    def spawn_obstacles(
+        self,
+        num_obstacles: int,
+        obstacle_type: str,
+        world: World,
+        scenario: "ZoneScenario",  # type: ignore
+        np_random: np.random.Generator,
+        agent_pos: NDArray[np.float64] | None = None,
+        obstacle_configs: list["ObjConfig"] | None = None,
+    ) -> list[Position]:
+        """Spawn obstacles at fixed positions — swap & overlap logic is in post_spawn."""
+        return self._fixed_strategy.spawn_obstacles(
+            num_obstacles=num_obstacles,
+            obstacle_type=obstacle_type,
+            world=world,
+            scenario=scenario,
+            np_random=np_random,
+            agent_pos=agent_pos,
+            obstacle_configs=obstacle_configs,
+        )
+
+    # ------------------------------------------------------------------ #
+    #  Post-spawn helpers called by SpawnManager after all colours placed #
+    # ------------------------------------------------------------------ #
+
+    def post_spawn(
+        self,
+        scenario: "ZoneScenario",  # type: ignore
+        spawned_positions: dict[str, list[Position]],
+        np_random: np.random.Generator,
+    ) -> dict[str, list[Position]]:
+        """Apply random swaps and overlap removal after fixed spawning."""
+        zone_landmarks: dict[str, list] = {
+            "yellow": list(scenario.yellow),
+            "red": list(scenario.red),
+            "white": list(scenario.white),
+            "black": list(scenario.black),
+        }
+
+        # --- 1. Random swaps ---
+        for swap in self.config.swaps:
+            src = swap.source_zone
+            tgt = swap.target_zone
+            src_landmarks = zone_landmarks.get(src, [])
+            tgt_landmarks = zone_landmarks.get(tgt, [])
+            src_positions = spawned_positions.get(src, [])
+
+            if not src_landmarks or swap.num_swaps <= 0:
+                continue
+
+            n = min(swap.num_swaps, len(src_landmarks))
+            chosen_indices = list(
+                np_random.choice(len(src_landmarks), size=n, replace=False)
+            )
+            # Sort descending so removals don't shift indices
+            chosen_indices.sort(reverse=True)
+
+            for idx in chosen_indices:
+                src_lm = src_landmarks[idx]
+                pos_array = src_lm.state.pos.copy()
+                pos_tuple: Position = (float(pos_array[0]), float(pos_array[1]))
+
+                # Reuse the source landmark as a target landmark (re-color it)
+                tgt_size = getattr(scenario.zone_sizes, tgt, 0.5)
+                src_lm.name = f"{tgt}_{len(tgt_landmarks)}"
+                src_lm.size = tgt_size
+                from contgrid.core import Color
+
+                src_lm.color = Color[tgt.upper()]
+                tgt_landmarks.append(src_lm)
+
+                if tgt not in spawned_positions:
+                    spawned_positions[tgt] = []
+                spawned_positions[tgt].append(pos_tuple)
+
+                # Remove the source landmark
+                src_landmarks.pop(idx)
+                if idx < len(src_positions):
+                    src_positions.pop(idx)
+
+            zone_landmarks[src] = src_landmarks
+            zone_landmarks[tgt] = tgt_landmarks
+            spawned_positions[src] = src_positions
+
+        # --- 3. Sync scenario landmark lists ---
+        scenario.yellow = zone_landmarks["yellow"]
+        scenario.red = zone_landmarks["red"]
+        scenario.white = zone_landmarks["white"]
+        scenario.black = zone_landmarks["black"]
+
+        return spawned_positions

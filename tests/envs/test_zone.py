@@ -6,9 +6,12 @@ import numpy as np
 
 from contgrid.core import Grid, WorldConfig
 from contgrid.envs.zone import (
+    FixedRandomSwapSpawnConfig,
+    FixedRandomSwapSpawnStrategy,
     GaussianSpawnConfig,
     GaussianSpawnStrategy,
     ObjConfig,
+    RandomSwapSpec,
     SpawnConfig,
     FixedSpawnConfig,
     FixedSpawnStrategy,
@@ -493,5 +496,132 @@ class TestFixedSpawnStrategy:
                             f"{color_i}[{idx_i}] and {color_j}[{idx_j}] too close: "
                             f"{dist:.4f} < {min_spacing:.4f}"
                         )
+        finally:
+            env.close()
+
+
+class TestFixedRandomSwapSpawnStrategy:
+    """Tests for the FixedRandomSwapSpawnStrategy."""
+
+    # The 4 fixed yellow zone candidate positions
+    YELLOW_POSITIONS = [
+        (1.5, 5.5),
+        (9.5, 5.5),
+        (5.5, 1.5),
+        (5.5, 9.5),
+    ]
+
+    def test_fixed_random_swap_spawn(self):
+        """Random swap: 1 white at a yellow pos, 1 yellow removed due to black overlap."""
+        agent_size = 0.1
+        output_dir = Path("tests") / "out" / "zone" / "fixed_random_swap_spawn"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        spawn_config = SpawnConfig(
+            agent=None,
+            subtask_seq=[],
+            yellow_zone=[
+                ObjConfig(pos=(1.5, 5.5)),
+                ObjConfig(pos=(9.5, 5.5)),
+                ObjConfig(pos=(5.5, 1.5)),
+                ObjConfig(pos=(5.5, 9.5)),
+            ],
+            red_zone=[
+                ObjConfig(pos=(5.5, 5.5)),
+                ObjConfig(pos=(3.5, 3.5)),
+                ObjConfig(pos=(7.5, 3.5)),
+                ObjConfig(pos=(7.5, 7.5)),
+                ObjConfig(pos=(3.5, 7.5)),
+            ],
+            white_zone=[],
+            black_zone=[],
+            zone_size=ZoneSizeConfig(
+                yellow=0.25,
+                red=0.75,
+                white=0.25,
+                black=0.25,
+            ),
+            agent_size=agent_size,
+            spawn_method=FixedRandomSwapSpawnConfig(
+                swaps=[
+                    RandomSwapSpec(
+                        source_zone="yellow",
+                        target_zone="white",
+                        num_swaps=1,
+                    ),
+                ],
+            ),
+            reset_agent_first=False,
+        )
+
+        scenario_config = ZoneScenarioConfig(spawn_config=spawn_config)
+        world_config = WorldConfig(
+            grid=Grid(
+                layout=[
+                    "############",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "############",
+                ]
+            )
+        )
+
+        env = ZoneEnv(scenario_config=scenario_config, world_config=world_config)
+        try:
+            for seed in (7, 17, 27, 37):
+                env.reset(seed=seed)
+                rendered = env.render()
+                assert rendered is not None
+                image_path = output_dir / f"fixed_random_swap_seed_{seed}.png"
+                imageio.imwrite(image_path, rendered.astype(np.uint8))
+                assert image_path.exists()
+
+                scenario = cast(ZoneScenario, env.scenario)
+
+                strategy = scenario.spawn_manager.spawn_strategy
+                assert isinstance(strategy, FixedRandomSwapSpawnStrategy)
+
+                # 1 white zone spawned at one of the yellow positions
+                assert len(scenario.white_pos) == 1, (
+                    f"Expected 1 white zone, got {len(scenario.white_pos)}"
+                )
+                white_pos_tuple = (
+                    float(scenario.white_pos[0][0]),
+                    float(scenario.white_pos[0][1]),
+                )
+                assert white_pos_tuple in self.YELLOW_POSITIONS, (
+                    f"White zone at {white_pos_tuple} not in yellow candidates"
+                )
+
+                # 5 red zones unchanged
+                assert len(scenario.red_pos) == 5
+
+                # Yellow zones: started with 4, minus 1 swap
+                num_yellow = len(scenario.yellow_pos)
+                assert num_yellow in (3,), f"Expected 3 zones, got {num_yellow}"
+
+                # White zone: started with 0, plus 1 swap
+                assert len(scenario.white_pos) == 1
+
+                # Black zone: started with 0, no swaps
+                assert len(scenario.black_pos) == 0
+
+                # Verify total landmark count matches
+                expected_total = num_yellow + 5 + 1  # yellow + red + white
+                assert (
+                    len(scenario.yellow)
+                    + len(scenario.red)
+                    + len(scenario.white)
+                    + len(scenario.black)
+                    == expected_total
+                )
         finally:
             env.close()

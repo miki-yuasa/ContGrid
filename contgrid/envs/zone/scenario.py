@@ -247,7 +247,20 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             for i, config in enumerate(self.config.spawn_config.black_zone)
         ]
 
-        return self.yellow + self.red + self.white + self.black
+        landmarks = self.yellow + self.red + self.white + self.black
+        self._save_initial_landmarks()
+        return landmarks
+
+    def _save_initial_landmarks(self) -> None:
+        """Save initial landmark lists and their properties for restoring before each reset."""
+        self._init_yellow = list(self.yellow)
+        self._init_red = list(self.red)
+        self._init_white = list(self.white)
+        self._init_black = list(self.black)
+        # Save original properties since post_spawn may mutate landmark objects
+        self._init_landmark_props: dict[int, tuple[str, float, object]] = {}
+        for lm in self._init_yellow + self._init_red + self._init_white + self._init_black:
+            self._init_landmark_props[id(lm)] = (lm.name, lm.size, lm.color)
 
     def reset_world(self, world: World, np_random: np.random.Generator) -> None:
         """Reset the world, ensuring agents are reset before landmarks.
@@ -273,6 +286,21 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                 for p in np.argwhere(world.numeric_grid == 0).tolist()
             ]
         self.free_cells: list[CellPosition] = self.init_free_cells.copy()
+
+        # Restore original landmark lists and properties (may have been mutated by post_spawn)
+        if hasattr(self, "_init_yellow"):
+            self.yellow = list(self._init_yellow)
+            self.red = list(self._init_red)
+            self.white = list(self._init_white)
+            self.black = list(self._init_black)
+            # Restore mutated landmark properties
+            for lm in self.yellow + self.red + self.white + self.black:
+                if id(lm) in self._init_landmark_props:
+                    name, size, color = self._init_landmark_props[id(lm)]
+                    lm.name = name
+                    lm.size = size
+                    lm.color = color
+
         self._spawned_zone_positions: dict[str, list[NDArray[np.float64]]] = {
             "yellow": [],
             "red": [],
@@ -326,6 +354,8 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self.wall_bounds = world.wall_collision_checker.wall_bounds
         self.cell_size = world.grid.cell_size
 
+        # Rebuild landmarks from (possibly mutated) zone lists
+        world.landmarks = self.yellow + self.red + self.white + self.black
         return world.landmarks
 
     def _post_reset_world(self, world: World, np_random: np.random.Generator) -> None:
