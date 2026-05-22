@@ -322,10 +322,64 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                     self.config.spawn_config.agent, dtype=np.float64
                 )
             else:
-                chose_cell_idx = np_random.choice(len(self.free_cells))
-                new_pos: CellPosition = self.free_cells[chose_cell_idx]
-                agent.state.pos = np.array([new_pos[0], new_pos[1]], dtype=np.float64)
-                self.free_cells.pop(chose_cell_idx)
+                valid_cells = self.free_cells
+                agent_size = self.config.spawn_config.agent_size
+                if not self.config.spawn_config.reset_agent_first:
+                    valid_cells: list[CellPosition] = []
+                    for cell in self.free_cells:
+                        cell_pos = np.array(cell, dtype=np.float64)
+                        overlaps = False
+                        for lm in self.yellow + self.red + self.white + self.black:
+                            min_dist = lm.size + agent_size
+                            if np.linalg.norm(cell_pos - lm.state.pos) < min_dist - 1e-9:
+                                overlaps = True
+                                break
+                        if not overlaps:
+                            valid_cells.append(cell)
+
+                if valid_cells:
+                    chose_cell = valid_cells[np_random.choice(len(valid_cells))]
+                    center_pos = np.array([chose_cell[0], chose_cell[1]], dtype=np.float64)
+                    self.free_cells.remove(chose_cell)
+                else:
+                    chose_cell_idx = np_random.choice(len(self.free_cells))
+                    new_pos = self.free_cells[chose_cell_idx]
+                    center_pos = np.array([new_pos[0], new_pos[1]], dtype=np.float64)
+                    self.free_cells.pop(chose_cell_idx)
+
+                # Perturb the selected center position
+                perturbation_limit = getattr(self.config.spawn_config, "agent_perturbation", 0.25)
+                perturbed_pos = center_pos
+                if perturbation_limit > 0:
+                    for _ in range(100):
+                        dx = np_random.uniform(-perturbation_limit, perturbation_limit)
+                        dy = np_random.uniform(-perturbation_limit, perturbation_limit)
+                        candidate_pos = center_pos + np.array([dx, dy], dtype=np.float64)
+
+                        # Check wall collision
+                        if not world.wall_collision_checker.is_position_valid(
+                            agent_size,
+                            world.contact_margin,
+                            (float(candidate_pos[0]), float(candidate_pos[1])),
+                        ):
+                            continue
+
+                        # Check zone overlap if reset_agent_first is False
+                        if not self.config.spawn_config.reset_agent_first:
+                            overlaps = False
+                            for lm in self.yellow + self.red + self.white + self.black:
+                                min_dist = lm.size + agent_size
+                                if np.linalg.norm(candidate_pos - lm.state.pos) < min_dist - 1e-9:
+                                    overlaps = True
+                                    break
+                            if overlaps:
+                                continue
+
+                        # Accept perturbed position
+                        perturbed_pos = candidate_pos
+                        break
+
+                agent.state.pos = perturbed_pos
 
         return world.agents
 

@@ -614,6 +614,15 @@ class TestFixedRandomSwapSpawnStrategy:
                 # Black zone: started with 0, no swaps
                 assert len(scenario.black_pos) == 0
 
+                # Verify agent does not overlap with any zone
+                agent_pos = env.world.agents[0].state.pos.copy()
+                for lm in scenario.yellow + scenario.red + scenario.white + scenario.black:
+                    dist_to_agent = np.linalg.norm(lm.state.pos - agent_pos)
+                    min_agent_distance = lm.size + agent_size
+                    assert dist_to_agent >= (min_agent_distance - 1e-9), (
+                        f"{lm.name} too close to agent: {dist_to_agent:.4f} < {min_agent_distance:.4f}"
+                    )
+
                 # Verify total landmark count matches
                 expected_total = num_yellow + 5 + 1  # yellow + red + white
                 assert (
@@ -622,6 +631,104 @@ class TestFixedRandomSwapSpawnStrategy:
                     + len(scenario.white)
                     + len(scenario.black)
                     == expected_total
+                )
+        finally:
+            env.close()
+
+
+class TestAgentSpawningPerturbation:
+    def test_agent_spawning_perturbation(self):
+        """Test that agent position is perturbed when agent_perturbation > 0, and not when it is 0."""
+        agent_size = 0.1
+        zone_size = 0.5
+        min_spacing = 1.5
+
+        # Helper to create scenario and world config
+        def make_config(agent_perturbation: float):
+            spawn_config = SpawnConfig(
+                agent=None,
+                subtask_seq=[],
+                yellow_zone=[ObjConfig(pos=None) for _ in range(2)],
+                red_zone=[ObjConfig(pos=None) for _ in range(2)],
+                white_zone=[ObjConfig(pos=None) for _ in range(2)],
+                black_zone=[ObjConfig(pos=None) for _ in range(2)],
+                zone_size=zone_size,
+                agent_size=agent_size,
+                agent_perturbation=agent_perturbation,
+                spawn_method=UniformRandomConfig(min_spacing=min_spacing),
+                reset_agent_first=False,
+            )
+            scenario_config = ZoneScenarioConfig(spawn_config=spawn_config)
+            world_config = WorldConfig(
+                grid=Grid(
+                    layout=[
+                        "############",
+                        "#          #",
+                        "#          #",
+                        "#          #",
+                        "#          #",
+                        "#          #",
+                        "#          #",
+                        "#          #",
+                        "#          #",
+                        "#          #",
+                        "#          #",
+                        "############",
+                    ]
+                )
+            )
+            return scenario_config, world_config
+
+        # 1. Test with agent_perturbation = 0.25
+        sc_config, w_config = make_config(agent_perturbation=0.25)
+        env = ZoneEnv(scenario_config=sc_config, world_config=w_config)
+        try:
+            perturbed_count = 0
+            for seed in range(20):
+                env.reset(seed=seed)
+                agent_pos = env.world.agents[0].state.pos.copy()
+
+                # Check validity against walls
+                assert env.world.wall_collision_checker.is_position_valid(
+                    agent_size,
+                    env.world.contact_margin,
+                    (float(agent_pos[0]), float(agent_pos[1])),
+                ), f"Seed {seed}: Agent position {agent_pos} collided with walls"
+
+                # Check validity against landmarks
+                scenario = cast(ZoneScenario, env.scenario)
+                for lm in scenario.yellow + scenario.red + scenario.white + scenario.black:
+                    dist_to_agent = np.linalg.norm(lm.state.pos - agent_pos)
+                    min_agent_distance = lm.size + agent_size
+                    assert dist_to_agent >= (min_agent_distance - 1e-9), (
+                        f"Seed {seed}: {lm.name} too close to agent: {dist_to_agent:.4f} < {min_agent_distance:.4f}"
+                    )
+
+                # Check if position is perturbed (not exactly integers)
+                frac_x = abs(agent_pos[0] - round(agent_pos[0]))
+                frac_y = abs(agent_pos[1] - round(agent_pos[1]))
+                if frac_x > 1e-6 or frac_y > 1e-6:
+                    perturbed_count += 1
+
+            assert perturbed_count > 0, "Expected at least some agent positions to be perturbed"
+
+        finally:
+            env.close()
+
+        # 2. Test with agent_perturbation = 0.0
+        sc_config, w_config = make_config(agent_perturbation=0.0)
+        env = ZoneEnv(scenario_config=sc_config, world_config=w_config)
+        try:
+            for seed in range(20):
+                env.reset(seed=seed)
+                agent_pos = env.world.agents[0].state.pos.copy()
+
+                # Fractional part should be zero (exactly at cell center integers)
+                frac_x = abs(agent_pos[0] - round(agent_pos[0]))
+                frac_y = abs(agent_pos[1] - round(agent_pos[1]))
+                assert frac_x < 1e-6 and frac_y < 1e-6, (
+                    f"Seed {seed}: Expected no perturbation for agent_perturbation=0.0, "
+                    f"but got agent_pos={agent_pos} with fractional parts ({frac_x:.4f}, {frac_y:.4f})"
                 )
         finally:
             env.close()
