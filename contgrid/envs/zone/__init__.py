@@ -4,6 +4,7 @@ from .configs import (
     ObjConfig,
     RewardConfig,
     SpawnConfig,
+    ZoneSizeConfig,
     ZoneScenarioConfig,
 )
 from .env import (
@@ -31,6 +32,7 @@ __all__ = [
     "ObjConfig",
     "RewardConfig",
     "ZoneScenarioConfig",
+    "ZoneSizeConfig",
     "SpawnConfig",
     "SpawnMode",
     "GaussianSpawnConfig",
@@ -49,4 +51,3 @@ __all__ = [
     "GaussianSpawnStrategy",
     "UniformRandomSpawnStrategy",
 ]
-

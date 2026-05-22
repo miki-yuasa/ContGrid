@@ -1,5 +1,6 @@
 """RoomsScenario implementation."""
 
+from contgrid.envs.zone.configs import ZoneSizeConfig
 from typing import Any
 
 import numpy as np
@@ -38,11 +39,28 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         world_config: WorldConfig,
     ) -> None:
         super().__init__(config, world_config)
-        self.zone_thr_dist: float = (
-            (config.spawn_config.zone_size + config.spawn_config.agent_size / 2)
-            if config.spawn_config.zone_thr_dist is None
-            else config.spawn_config.zone_thr_dist
-        )
+        self.zone_thr_dist: dict[str, float] = {
+            "yellow": (
+                (config.spawn_config.zone_size.yellow + config.spawn_config.agent_size)
+                if config.spawn_config.zone_thr_dist is None
+                else config.spawn_config.zone_thr_dist
+            ),
+            "red": (
+                (config.spawn_config.zone_size.red + config.spawn_config.agent_size)
+                if config.spawn_config.zone_thr_dist is None
+                else config.spawn_config.zone_thr_dist
+            ),
+            "white": (
+                (config.spawn_config.zone_size.white + config.spawn_config.agent_size)
+                if config.spawn_config.zone_thr_dist is None
+                else config.spawn_config.zone_thr_dist
+            ),
+            "black": (
+                (config.spawn_config.zone_size.black + config.spawn_config.agent_size)
+                if config.spawn_config.zone_thr_dist is None
+                else config.spawn_config.zone_thr_dist
+            ),
+        }
 
         self.spawn_manager = SpawnManager(config.spawn_config)
 
@@ -148,10 +166,22 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         # Initialize yellow, red, white, and black zones with default position [0, 0]
         # These will be updated during spawning
         default_pos = np.array([0.0, 0.0], dtype=np.float64)
+
+        if isinstance(self.config.spawn_config.zone_size, ZoneSizeConfig):
+            zone_sizes = self.config.spawn_config.zone_size
+        else:
+            zone_sizes = ZoneSizeConfig(
+                yellow=self.config.spawn_config.zone_size,
+                red=self.config.spawn_config.zone_size,
+                white=self.config.spawn_config.zone_size,
+                black=self.config.spawn_config.zone_size,
+            )
+        self.zone_sizes: ZoneSizeConfig = zone_sizes
+
         self.yellow = [
             Landmark(
                 name=f"yellow_{i}",
-                size=self.config.spawn_config.zone_size,
+                size=zone_sizes.yellow,
                 collide=False,
                 color=Color.YELLOW.name,
                 state=EntityState(
@@ -168,7 +198,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self.red = [
             Landmark(
                 name=f"red_{i}",
-                size=self.config.spawn_config.zone_size,
+                size=zone_sizes.red,
                 collide=False,
                 color=Color.RED.name,
                 state=EntityState(
@@ -185,7 +215,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self.white = [
             Landmark(
                 name=f"white_{i}",
-                size=self.config.spawn_config.zone_size,
+                size=zone_sizes.white,
                 collide=False,
                 color=Color.WHITE.name,
                 state=EntityState(
@@ -202,7 +232,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self.black = [
             Landmark(
                 name=f"black_{i}",
-                size=self.config.spawn_config.zone_size,
+                size=zone_sizes.black,
                 collide=False,
                 color=Color.BLACK.name,
                 state=EntityState(
@@ -226,10 +256,12 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         to know the agent's position to avoid overlapping spawns.
         """
         self._pre_reset_world(world, np_random)
-        # Reset agents FIRST so landmarks can use agent position for spawn validation
-        world.agents = self.reset_agents(world, np_random)
+        if self.config.spawn_config.reset_agent_first:
+            world.agents = self.reset_agents(world, np_random)
         # Reset landmarks (obstacles) using agent position
         world.landmarks = self.reset_landmarks(world, np_random)
+        if not self.config.spawn_config.reset_agent_first:
+            world.agents = self.reset_agents(world, np_random)
         self._post_reset_world(world, np_random)
 
     def _pre_reset_world(self, world: World, np_random: np.random.Generator) -> None:
@@ -325,18 +357,22 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self._black_zone_active = False
 
     def _is_inside_zone(
-        self, agent_pos: NDArray[np.float64], zone_positions: NDArray[np.float64]
+        self,
+        agent_pos: NDArray[np.float64],
+        zone_positions: NDArray[np.float64],
+        zone_type: str,
     ) -> bool:
         if len(zone_positions) == 0:
             return False
+        zone_size = getattr(self.zone_sizes, zone_type)
         distances = np.linalg.norm(zone_positions - agent_pos, axis=1)
-        return bool(np.any(distances < self.zone_thr_dist))
+        return bool(np.any(distances < zone_size))
 
     def _update_visit_counts(self, agent_pos: NDArray[np.float64]) -> None:
-        in_yellow_zone = self._is_inside_zone(agent_pos, self.yellow_pos)
-        in_red_zone = self._is_inside_zone(agent_pos, self.red_pos)
-        in_white_zone = self._is_inside_zone(agent_pos, self.white_pos)
-        in_black_zone = self._is_inside_zone(agent_pos, self.black_pos)
+        in_yellow_zone = self._is_inside_zone(agent_pos, self.yellow_pos, "yellow")
+        in_red_zone = self._is_inside_zone(agent_pos, self.red_pos, "red")
+        in_white_zone = self._is_inside_zone(agent_pos, self.white_pos, "white")
+        in_black_zone = self._is_inside_zone(agent_pos, self.black_pos, "black")
 
         if in_yellow_zone and not self._yellow_zone_active:
             self.yellow_visit_count += 1

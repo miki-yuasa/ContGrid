@@ -229,7 +229,8 @@ class SpawnManager:
             positions.extend(additional_positions)
 
         # Update obstacle positions with safety check for agent distance
-        obstacle_radius = self.spawn_config.zone_size
+        # Use zone_size BaseModel class attribute matching obstacle_type
+        obstacle_radius = getattr(scenario.zone_sizes, obstacle_type)
         agent_radius = self.spawn_config.agent_size
         min_agent_distance = obstacle_radius + agent_radius
 

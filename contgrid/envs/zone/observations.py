@@ -24,7 +24,8 @@ class ZoneDistObsFactory(BaseObsFactory):
         low_bound: NDArray[np.float64],
         high_bound: NDArray[np.float64],
     ) -> dict[str, spaces.Space]:
-
+        if num_zones == 0:
+            return {self.name: spaces.Box(low=np.array([], dtype=np.float64), high=np.array([], dtype=np.float64), dtype=np.float64)}
         return {
             self.name: spaces.Box(
                 low=np.stack([low_bound] * num_zones),

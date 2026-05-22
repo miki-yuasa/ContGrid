@@ -94,7 +94,8 @@ class FixedSpawnStrategy(SpawnStrategy):
         }
         obstacle_landmarks = obstacle_landmarks_by_type.get(obstacle_type, [])
 
-        obstacle_radius = scenario.config.spawn_config.zone_size
+        # Use zone_size BaseModel class attribute matching obstacle_type
+        obstacle_radius = getattr(scenario.zone_sizes, obstacle_type)
         agent_radius = scenario.config.spawn_config.agent_size
         min_agent_distance = obstacle_radius + agent_radius
 

@@ -42,6 +42,13 @@ class SubtaskConfig(BaseModel):
     obstacle_absorbing: bool = False
 
 
+class ZoneSizeConfig(BaseModel):
+    yellow: float = 0.5
+    red: float = 0.5
+    white: float = 0.5
+    black: float = 0.5
+
+
 class SpawnConfig(BaseModel):
     """
     Configuration for spawning objects in the environment.
@@ -86,10 +93,11 @@ class SpawnConfig(BaseModel):
     white_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
     black_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
     agent_size: float = 0.1
-    zone_size: float = 0.5
+    zone_size: float | ZoneSizeConfig = 0.5
     zone_thr_dist: float | None = None
     agent_u_range: float = 5.0
     spawn_method: SpawnMethodConfig = UniformRandomConfig()
+    reset_agent_first: bool = True
 
     model_config = {"arbitrary_types_allowed": True}
 
