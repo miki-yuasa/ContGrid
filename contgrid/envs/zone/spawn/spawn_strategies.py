@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import TYPE_CHECKING, Annotated, Any, Literal, override
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
