@@ -1,3 +1,4 @@
+from contgrid.envs.zone.configs import ObsConfig
 from pathlib import Path
 from typing import cast
 
@@ -534,7 +535,7 @@ class TestFixedRandomSwapSpawnStrategy:
                 ObjConfig(pos=(3.5, 7.5)),
             ],
             white_zone=[],
-            black_zone=[],
+            black_zone=[ObjConfig(pos=None), ObjConfig(pos=None)],
             zone_size=ZoneSizeConfig(
                 yellow=0.25,
                 red=0.75,
@@ -576,7 +577,7 @@ class TestFixedRandomSwapSpawnStrategy:
 
         env = ZoneEnv(scenario_config=scenario_config, world_config=world_config)
         try:
-            for seed in (7, 17, 27, 37):
+            for seed in (7, 17, 27, 37, 47, 57, 67, 77, 87, 97):
                 env.reset(seed=seed)
                 rendered = env.render()
                 assert rendered is not None
@@ -612,7 +613,7 @@ class TestFixedRandomSwapSpawnStrategy:
                 assert len(scenario.white_pos) == 1
 
                 # Black zone: started with 0, no swaps
-                assert len(scenario.black_pos) == 0
+                assert len(scenario.black_pos) == 2
 
                 # Verify agent does not overlap with any zone
                 agent_pos = env.world.agents[0].state.pos.copy()
@@ -626,7 +627,7 @@ class TestFixedRandomSwapSpawnStrategy:
                     )
 
                 # Verify total landmark count matches
-                expected_total = num_yellow + 5 + 1  # yellow + red + white
+                expected_total = num_yellow + 5 + 1 + 2  # yellow + red + white
                 assert (
                     len(scenario.yellow)
                     + len(scenario.red)
