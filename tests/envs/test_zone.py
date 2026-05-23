@@ -616,7 +616,9 @@ class TestFixedRandomSwapSpawnStrategy:
 
                 # Verify agent does not overlap with any zone
                 agent_pos = env.world.agents[0].state.pos.copy()
-                for lm in scenario.yellow + scenario.red + scenario.white + scenario.black:
+                for lm in (
+                    scenario.yellow + scenario.red + scenario.white + scenario.black
+                ):
                     dist_to_agent = np.linalg.norm(lm.state.pos - agent_pos)
                     min_agent_distance = lm.size + agent_size
                     assert dist_to_agent >= (min_agent_distance - 1e-9), (
@@ -632,6 +634,8 @@ class TestFixedRandomSwapSpawnStrategy:
                     + len(scenario.black)
                     == expected_total
                 )
+                for _ in range(5):
+                    env.step(env.action_space.sample())
         finally:
             env.close()
 
@@ -697,7 +701,9 @@ class TestAgentSpawningPerturbation:
 
                 # Check validity against landmarks
                 scenario = cast(ZoneScenario, env.scenario)
-                for lm in scenario.yellow + scenario.red + scenario.white + scenario.black:
+                for lm in (
+                    scenario.yellow + scenario.red + scenario.white + scenario.black
+                ):
                     dist_to_agent = np.linalg.norm(lm.state.pos - agent_pos)
                     min_agent_distance = lm.size + agent_size
                     assert dist_to_agent >= (min_agent_distance - 1e-9), (
@@ -710,7 +716,9 @@ class TestAgentSpawningPerturbation:
                 if frac_x > 1e-6 or frac_y > 1e-6:
                     perturbed_count += 1
 
-            assert perturbed_count > 0, "Expected at least some agent positions to be perturbed"
+            assert perturbed_count > 0, (
+                "Expected at least some agent positions to be perturbed"
+            )
 
         finally:
             env.close()
