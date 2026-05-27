@@ -130,7 +130,17 @@ class FixedSpawnStrategy(SpawnStrategy):
         agent_radius = scenario.config.spawn_config.agent_size
         min_agent_distance = obstacle_radius + agent_radius
 
-        for landmark in obstacle_landmarks[:num_obstacles]:
+        for i, landmark in enumerate(obstacle_landmarks[:num_obstacles]):
+            has_fixed_obstacle_pos = False
+            if obstacle_configs is not None and i < len(obstacle_configs):
+                if isinstance(obstacle_configs[i].pos, tuple):
+                    has_fixed_obstacle_pos = True
+            elif isinstance(landmark.reset_config.spawn_pos, tuple):
+                has_fixed_obstacle_pos = True
+
+            has_fixed_agent_pos = scenario.config.spawn_config.agent is not None
+            skip_agent_check = has_fixed_agent_pos and has_fixed_obstacle_pos
+
             max_attempts = 100
             for _attempt in range(max_attempts):
                 new_pos = scenario._choose_new_pos(
@@ -147,7 +157,7 @@ class FixedSpawnStrategy(SpawnStrategy):
                 ):
                     is_valid = False
 
-                if agent_pos is not None:
+                if agent_pos is not None and not skip_agent_check:
                     if np.linalg.norm(new_pos_array - agent_pos) < min_agent_distance:
                         is_valid = False
 

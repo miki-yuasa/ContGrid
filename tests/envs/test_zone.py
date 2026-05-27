@@ -500,6 +500,71 @@ class TestFixedSpawnStrategy:
         finally:
             env.close()
 
+    def test_fixed_spawn_with_agent_overlap(self):
+        """Test that agent and obstacle can overlap under FixedSpawnStrategy when both are fixed."""
+        spawn_config = SpawnConfig(
+            agent=(1.5, 5.5),
+            subtask_seq=[],
+            yellow_zone=[
+                ObjConfig(pos=(1.5, 5.5)),
+            ],
+            red_zone=[],
+            white_zone=[],
+            black_zone=[],
+            zone_size=0.5,
+            agent_size=0.1,
+            spawn_method=FixedSpawnConfig(),
+            reset_agent_first=True,
+        )
+
+        scenario_config = ZoneScenarioConfig(spawn_config=spawn_config)
+        world_config = WorldConfig(
+            grid=Grid(
+                layout=[
+                    "############",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "#          #",
+                    "############",
+                ]
+            )
+        )
+
+        env = ZoneEnv(scenario_config=scenario_config, world_config=world_config)
+        try:
+            env.reset(seed=42)
+            scenario = cast(ZoneScenario, env.scenario)
+
+            # Check that yellow zone spawned exactly at configured position (1.5, 5.5)
+            assert len(scenario.yellow_pos) == 1
+            yellow_pos = scenario.yellow_pos[0]
+            np.testing.assert_allclose(yellow_pos, [1.5, 5.5], atol=1e-5)
+
+            # Check agent position is exactly (1.5, 5.5)
+            agent_pos = env.world.agents[0].state.pos
+            np.testing.assert_allclose(agent_pos, [1.5, 5.5], atol=1e-5)
+
+            # Repeat with reset_agent_first = False
+            spawn_config.reset_agent_first = False
+            env2 = ZoneEnv(scenario_config=scenario_config, world_config=world_config)
+            try:
+                env2.reset(seed=42)
+                scenario2 = cast(ZoneScenario, env2.scenario)
+                assert len(scenario2.yellow_pos) == 1
+                np.testing.assert_allclose(scenario2.yellow_pos[0], [1.5, 5.5], atol=1e-5)
+                np.testing.assert_allclose(env2.world.agents[0].state.pos, [1.5, 5.5], atol=1e-5)
+            finally:
+                env2.close()
+        finally:
+            env.close()
+
 
 class TestFixedRandomSwapSpawnStrategy:
     """Tests for the FixedRandomSwapSpawnStrategy."""

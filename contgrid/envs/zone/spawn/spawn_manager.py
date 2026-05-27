@@ -259,8 +259,15 @@ class SpawnManager:
                 pos_array = np.array(pos, dtype=np.float64)
                 position_is_valid = True
 
+                has_fixed_obstacle_pos = False
+                if i < len(obstacle_configs) and isinstance(obstacle_configs[i].pos, tuple):
+                    has_fixed_obstacle_pos = True
+
+                has_fixed_agent_pos = self.spawn_config.agent is not None
+                skip_agent_check = has_fixed_agent_pos and has_fixed_obstacle_pos
+
                 # Verify distance from agent and re-spawn if too close
-                if agent_pos is not None:
+                if agent_pos is not None and not skip_agent_check:
                     dist = np.linalg.norm(pos_array - agent_pos)
                     if dist < min_agent_distance:
                         # Find a position that's far enough from agent
