@@ -202,7 +202,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 collide=False,
                 color=Color.ORANGE.name,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
-                hatch="//" if config.reward < 0 else "",
+                hatch="xx" if config.reward < 0 else "",
                 reset_config=ResetConfig(spawn_pos=self._format_spawn_pos(config.pos)),
             )
             for i, config in enumerate(self.config.spawn_config.lavas)
@@ -216,7 +216,7 @@ class RoomsScenario(BaseScenario[RoomsScenarioConfig, dict[str, NDArray[np.float
                 color=Color.PURPLE.name,
                 collide=False,
                 state=EntityState(pos=np.array(config.pos, dtype=np.float64)),
-                hatch="//" if config.reward < 0 else "",
+                hatch="xx" if config.reward < 0 else "",
                 reset_config=ResetConfig(spawn_pos=self._format_spawn_pos(config.pos)),
             )
             for i, config in enumerate(self.config.spawn_config.holes)
