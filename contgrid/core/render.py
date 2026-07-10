@@ -150,6 +150,7 @@ class EnvRenderer(Renderer):
         size: float = entity.size
         shape: EntityShape = entity.shape
         color_normalized = tuple(c / 255.0 for c in entity.color)
+        hatch_lw: float = 0.5
         if shape == EntityShape.CIRCLE:
             # Draw filled circle
             circle = patches.Circle(
@@ -157,10 +158,10 @@ class EnvRenderer(Renderer):
                 size,
                 facecolor=color_normalized,
                 edgecolor="black",
-                linewidth=0.5,
+                linewidth=1,
                 zorder=2,
                 hatch=entity.hatch,
-                hatch_linewidth=0.3,
+                hatch_linewidth=hatch_lw,
             )
             ax.add_patch(circle)
         elif shape == EntityShape.SQUARE:
@@ -175,7 +176,7 @@ class EnvRenderer(Renderer):
                 linewidth=line_width,
                 zorder=0,
                 hatch=entity.hatch,
-                hatch_linewidth=0.3,
+                hatch_linewidth=hatch_lw,
             )
             ax.add_patch(rect)
         else:

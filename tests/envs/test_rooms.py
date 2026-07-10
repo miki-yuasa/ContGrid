@@ -602,6 +602,8 @@ class TestRoomsScenario:
         spawn_config: SpawnConfig = SpawnConfig(
             agent=(3.0, 3.0),
             goal=ObjConfig(pos=(9, 8), reward=1.0, absorbing=False),
+            hole_size=0.4,
+            lava_size=0.4,
             lavas=[
                 ObjConfig(
                     pos=[
