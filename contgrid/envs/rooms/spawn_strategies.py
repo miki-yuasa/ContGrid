@@ -598,7 +598,8 @@ class PathGaussianSpawnStrategy(SpawnStrategy):
         """Get segments between neighboring doorways and to goal."""
         segments = []
 
-        neighbor_pairs = [("ld", "td"), ("ld", "bd"), ("td", "rd"), ("rd", "bd")]
+        assert self.topology is not None
+        neighbor_pairs = self.topology.get_neighbor_pairs()
 
         for d1, d2 in neighbor_pairs:
             if d1 in scenario.doorways and d2 in scenario.doorways:

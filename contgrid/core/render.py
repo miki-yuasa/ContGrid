@@ -19,6 +19,7 @@ from .world import World
 class RenderConfig(BaseModel):
     render_mode: Literal["human", "rgb_array"] = "rgb_array"
     draw_grid: bool = False
+    draw_wall_grid: bool = True
     width_px: int = 700
     height_px: int = 700
     dpi: int = 100
@@ -167,13 +168,15 @@ class EnvRenderer(Renderer):
             ax.add_patch(circle)
         elif shape == EntityShape.SQUARE:
             # Draw filled rectangle (square)
-            line_width: float = 0.0 if self.render_config.draw_grid else 0.5
+            draw_wall_grid = self.render_config.draw_wall_grid
+            line_width: float = 0.5 if draw_wall_grid else 0.0
+            edgecolor = "black" if draw_wall_grid else "none"
             rect = patches.Rectangle(
                 (x, y),
                 size,
                 size,
                 facecolor=color_normalized,
-                edgecolor="black",
+                edgecolor=edgecolor,
                 linewidth=line_width,
                 zorder=0,
                 hatch=entity.hatch,

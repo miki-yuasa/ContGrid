@@ -13,6 +13,12 @@ from .env import (
     RoomsEnv,
     RoomsEnvConfig,
 )
+from .nine_rooms_env import (
+    DEFAULT_NINE_ROOMS_SCENARIO_CONFIG,
+    DEFAULT_NINE_ROOMS_WORLD_CONFIG,
+    NineRoomsEnv,
+    NineRoomsEnvConfig,
+)
 from .scenario import RoomsScenario
 from .spawn_strategies import (
     FixedSpawnConfig,
@@ -37,11 +43,16 @@ __all__ = [
     "SpawnConfig",
     "SpawnMode",
     "UniformRandomConfig",
-    # Environment
+    # Environment (4-room)
     "RoomsEnv",
     "RoomsEnvConfig",
     "DEFAULT_ROOMS_SCENARIO_CONFIG",
     "DEFAULT_WORLD_CONFIG",
+    # Environment (9-room)
+    "NineRoomsEnv",
+    "NineRoomsEnvConfig",
+    "DEFAULT_NINE_ROOMS_SCENARIO_CONFIG",
+    "DEFAULT_NINE_ROOMS_WORLD_CONFIG",
     # Scenario
     "RoomsScenario",
     # Spawn strategies

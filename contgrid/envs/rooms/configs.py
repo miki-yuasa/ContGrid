@@ -22,7 +22,7 @@ class ObjConfig(BaseModel):
     pos: Position | list[Position] | None = None
     reward: float = 0.0
     absorbing: bool = False
-    room: Literal["top_left", "top_right", "bottom_left", "bottom_right"] | None = None
+    room: str | None = None
 
 
 class SpawnConfig(BaseModel):

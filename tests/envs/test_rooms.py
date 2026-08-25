@@ -58,6 +58,7 @@ class TestRoomsEnv:
         assert isinstance(observation, dict)
         expected_keys = {
             "agent_pos",
+            "agent_vel",
             "goal_pos",
             "lava_pos",
             "hole_pos",
@@ -139,6 +140,7 @@ class TestRoomsEnv:
         # Check that all expected keys are present
         expected_keys = {
             "agent_pos",
+            "agent_vel",
             "goal_pos",
             "lava_pos",
             "hole_pos",
@@ -482,6 +484,7 @@ class TestRoomsScenario:
         # Check all expected keys are present
         expected_keys = {
             "agent_pos",
+            "agent_vel",
             "goal_pos",
             "lava_pos",
             "hole_pos",

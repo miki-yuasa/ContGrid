@@ -25,26 +25,161 @@ class LineSegment:
         return float(np.linalg.norm(self.end - self.start))
 
 
+# ── Four-room topology constants ──────────────────────────────────────────────
+
+_FOUR_ROOM_NEIGHBOR_MAP: dict[str, list[str]] = {
+    "ld": ["td", "bd"],
+    "td": ["ld", "rd"],
+    "rd": ["td", "bd"],
+    "bd": ["ld", "rd"],
+}
+
+_FOUR_ROOM_BOUNDARIES: dict[str, dict[str, float]] = {
+    "top_left": {"min_x": 1.0, "max_x": 5.0, "min_y": 7.0, "max_y": 11.0},
+    "top_right": {"min_x": 7.0, "max_x": 11.5, "min_y": 6.0, "max_y": 11.0},
+    "bottom_left": {"min_x": 1.0, "max_x": 5.0, "min_y": 1.0, "max_y": 5.0},
+    "bottom_right": {"min_x": 7.0, "max_x": 11.5, "min_y": 1.0, "max_y": 4.0},
+}
+
+_FOUR_ROOM_CENTERS: dict[str, NDArray[np.float64]] = {
+    "top_left": np.array([3.5, 9.0]),
+    "top_right": np.array([9.0, 9.0]),
+    "bottom_left": np.array([3.5, 4.0]),
+    "bottom_right": np.array([9.0, 3.5]),
+}
+
+_FOUR_ROOM_DOORWAYS_MAP: dict[str, list[str]] = {
+    "top_left": ["ld", "td"],
+    "top_right": ["td", "rd"],
+    "bottom_left": ["ld", "bd"],
+    "bottom_right": ["rd", "bd"],
+}
+
+# ── Nine-room topology constants ─────────────────────────────────────────────
+
+_NINE_ROOM_NEIGHBOR_MAP: dict[str, list[str]] = {
+    # Horizontal doorways (connect left-right neighbors)
+    "tl_tc": ["tl_ml", "tc_tr", "tc_mc"],
+    "tc_tr": ["tl_tc", "tc_mc", "tr_mr"],
+    "ml_mc": ["tl_ml", "ml_bl", "tc_mc", "mc_mr", "mc_bc"],
+    "mc_mr": ["tc_mc", "ml_mc", "mc_bc", "tr_mr", "mr_br"],
+    "bl_bc": ["ml_bl", "mc_bc", "bc_br"],
+    "bc_br": ["bl_bc", "mc_bc", "mr_br"],
+    # Vertical doorways (connect top-bottom neighbors)
+    "tl_ml": ["tl_tc", "ml_mc", "ml_bl"],
+    "tc_mc": ["tl_tc", "tc_tr", "ml_mc", "mc_mr", "mc_bc"],
+    "tr_mr": ["tc_tr", "mc_mr", "mr_br"],
+    "ml_bl": ["tl_ml", "ml_mc", "bl_bc"],
+    "mc_bc": ["tc_mc", "ml_mc", "mc_mr", "bl_bc", "bc_br"],
+    "mr_br": ["tr_mr", "mc_mr", "bc_br"],
+}
+
+_NINE_ROOM_BOUNDARIES: dict[str, dict[str, float]] = {
+    "top_left": {"min_x": 1.0, "max_x": 5.0, "min_y": 13.0, "max_y": 17.0},
+    "top_center": {"min_x": 7.0, "max_x": 11.0, "min_y": 13.0, "max_y": 17.0},
+    "top_right": {"min_x": 13.0, "max_x": 17.0, "min_y": 13.0, "max_y": 17.0},
+    "middle_left": {"min_x": 1.0, "max_x": 5.0, "min_y": 7.0, "max_y": 11.0},
+    "middle_center": {"min_x": 7.0, "max_x": 11.0, "min_y": 7.0, "max_y": 11.0},
+    "middle_right": {"min_x": 13.0, "max_x": 17.0, "min_y": 7.0, "max_y": 11.0},
+    "bottom_left": {"min_x": 1.0, "max_x": 5.0, "min_y": 1.0, "max_y": 5.0},
+    "bottom_center": {"min_x": 7.0, "max_x": 11.0, "min_y": 1.0, "max_y": 5.0},
+    "bottom_right": {"min_x": 13.0, "max_x": 17.0, "min_y": 1.0, "max_y": 5.0},
+}
+
+_NINE_ROOM_CENTERS: dict[str, NDArray[np.float64]] = {
+    "top_left": np.array([3.0, 15.0]),
+    "top_center": np.array([9.0, 15.0]),
+    "top_right": np.array([15.0, 15.0]),
+    "middle_left": np.array([3.0, 9.0]),
+    "middle_center": np.array([9.0, 9.0]),
+    "middle_right": np.array([15.0, 9.0]),
+    "bottom_left": np.array([3.0, 3.0]),
+    "bottom_center": np.array([9.0, 3.0]),
+    "bottom_right": np.array([15.0, 3.0]),
+}
+
+_NINE_ROOM_DOORWAYS_MAP: dict[str, list[str]] = {
+    "top_left": ["tl_tc", "tl_ml"],
+    "top_center": ["tl_tc", "tc_tr", "tc_mc"],
+    "top_right": ["tc_tr", "tr_mr"],
+    "middle_left": ["tl_ml", "ml_mc", "ml_bl"],
+    "middle_center": ["tc_mc", "ml_mc", "mc_mr", "mc_bc"],
+    "middle_right": ["tr_mr", "mc_mr", "mr_br"],
+    "bottom_left": ["ml_bl", "bl_bc"],
+    "bottom_center": ["mc_bc", "bl_bc", "bc_br"],
+    "bottom_right": ["mr_br", "bc_br"],
+}
+
+
 class RoomTopology:
     """Defines the room structure and doorway connections."""
 
-    def __init__(self, doorways: dict[str, Position]):
+    def __init__(
+        self,
+        doorways: dict[str, Position],
+        *,
+        neighbor_map: dict[str, list[str]] | None = None,
+        room_boundaries: dict[str, dict[str, float]] | None = None,
+        room_centers: dict[str, NDArray[np.float64]] | None = None,
+        room_doorways_map: dict[str, list[str]] | None = None,
+    ):
         self.doorways = doorways
-        # Define which doorways are neighbors (connected by a room)
-        self.neighbor_map: dict[str, list[str]] = {
-            "ld": ["td", "bd"],
-            "td": ["ld", "rd"],
-            "rd": ["td", "bd"],
-            "bd": ["ld", "rd"],
-        }
 
-        # Room boundaries defined by corners (min_x, max_x, min_y, max_y)
-        self.room_boundaries = {
-            "top_left": {"min_x": 1.0, "max_x": 5.0, "min_y": 7.0, "max_y": 11.0},
-            "top_right": {"min_x": 7.0, "max_x": 11.5, "min_y": 6.0, "max_y": 11.0},
-            "bottom_left": {"min_x": 1.0, "max_x": 5.0, "min_y": 1.0, "max_y": 5.0},
-            "bottom_right": {"min_x": 7.0, "max_x": 11.5, "min_y": 1.0, "max_y": 4.0},
-        }
+        is_nine_rooms = len(doorways) > 4 or any(
+            k in _NINE_ROOM_NEIGHBOR_MAP for k in doorways
+        )
+
+        if neighbor_map is not None:
+            self.neighbor_map = neighbor_map
+        else:
+            self.neighbor_map = (
+                _NINE_ROOM_NEIGHBOR_MAP if is_nine_rooms else _FOUR_ROOM_NEIGHBOR_MAP
+            )
+
+        if room_boundaries is not None:
+            self.room_boundaries = room_boundaries
+        else:
+            self.room_boundaries = (
+                _NINE_ROOM_BOUNDARIES if is_nine_rooms else _FOUR_ROOM_BOUNDARIES
+            )
+
+        if room_centers is not None:
+            self._room_centers = room_centers
+        else:
+            self._room_centers = (
+                _NINE_ROOM_CENTERS if is_nine_rooms else _FOUR_ROOM_CENTERS
+            )
+
+        if room_doorways_map is not None:
+            self.room_doorways_map = room_doorways_map
+        else:
+            self.room_doorways_map = (
+                _NINE_ROOM_DOORWAYS_MAP
+                if is_nine_rooms
+                else _FOUR_ROOM_DOORWAYS_MAP
+            )
+
+    @classmethod
+    def four_rooms(cls, doorways: dict[str, Position]) -> "RoomTopology":
+        """Create a topology for the standard 4-room layout."""
+        return cls(
+            doorways,
+            neighbor_map=_FOUR_ROOM_NEIGHBOR_MAP,
+            room_boundaries=_FOUR_ROOM_BOUNDARIES,
+            room_centers=_FOUR_ROOM_CENTERS,
+            room_doorways_map=_FOUR_ROOM_DOORWAYS_MAP,
+        )
+
+    @classmethod
+    def nine_rooms(cls, doorways: dict[str, Position]) -> "RoomTopology":
+        """Create a topology for the 9-room (3×3) layout."""
+        return cls(
+            doorways,
+            neighbor_map=_NINE_ROOM_NEIGHBOR_MAP,
+            room_boundaries=_NINE_ROOM_BOUNDARIES,
+            room_centers=_NINE_ROOM_CENTERS,
+            room_doorways_map=_NINE_ROOM_DOORWAYS_MAP,
+        )
 
     def get_room(self, position: Position | NDArray[np.float64]) -> str:
         """Determine which room a position belongs to based on boundaries."""
@@ -60,17 +195,10 @@ class RoomTopology:
                 return room_name
 
         # Fallback: if position is outside all boundaries (e.g., doorway), find closest room center
-        room_centers = {
-            "top_left": np.array([3.5, 9.0]),
-            "top_right": np.array([9.0, 9.0]),
-            "bottom_left": np.array([3.5, 4.0]),
-            "bottom_right": np.array([9.0, 3.5]),
-        }
-
         min_dist = float("inf")
-        closest_room = "top_left"
+        closest_room = next(iter(self._room_centers))
 
-        for room_name, center in room_centers.items():
+        for room_name, center in self._room_centers.items():
             dist = np.linalg.norm(pos - center)
             if dist < min_dist:
                 min_dist = dist
@@ -82,11 +210,30 @@ class RoomTopology:
         """Get names of doorways that are neighbors to the given doorway."""
         return self.neighbor_map.get(doorway_name, [])
 
-    def get_doorways_in_room(self, position: Position, grid: Grid) -> list[str]:
+    def get_neighbor_pairs(self) -> list[tuple[str, str]]:
+        """Get all unique neighbor doorway pairs derived from the neighbor map."""
+        pairs: set[tuple[str, str]] = set()
+        for doorway, neighbors in self.neighbor_map.items():
+            for neighbor in neighbors:
+                pair = tuple(sorted([doorway, neighbor]))
+                pairs.add(pair)  # type: ignore[arg-type]
+        return list(pairs)
+
+    def get_doorways_in_room(
+        self, position: Position, grid: Grid | None = None
+    ) -> list[str]:
         """
         Determine which doorways belong to the room containing the given position.
-        Returns up to 2 doorway names.
         """
+        if self.room_doorways_map:
+            room = self.get_room(position)
+            if room in self.room_doorways_map:
+                doorways = [
+                    d for d in self.room_doorways_map[room] if d in self.doorways
+                ]
+                if doorways:
+                    return doorways
+
         distances = {
             name: np.linalg.norm(np.array(position) - np.array(pos))
             for name, pos in self.doorways.items()
