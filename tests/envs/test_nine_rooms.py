@@ -316,6 +316,9 @@ class TestNineRoomsEnv:
 
     def test_path_gaussian_spawn_nine_rooms(self):
         """Test PathGaussian obstacle spawning across all 9 rooms."""
+        output_dir = os.path.join("tests", "out")
+        os.makedirs(output_dir, exist_ok=True)
+
         rooms = [
             "top_left",
             "top_center",
@@ -328,10 +331,12 @@ class TestNineRoomsEnv:
             "bottom_right",
         ]
         lavas = [
-            ObjConfig(pos=None, reward=-1.0, absorbing=False, room=r) for r in rooms
+            ObjConfig(pos=None, reward=-1.0, absorbing=False, room=r)
+            for r in rooms + rooms
         ]
         holes = [
-            ObjConfig(pos=None, reward=-1.0, absorbing=False, room=r) for r in rooms
+            ObjConfig(pos=None, reward=-1.0, absorbing=False, room=r)
+            for r in rooms + rooms
         ]
 
         spawn_config = SpawnConfig(
@@ -353,21 +358,28 @@ class TestNineRoomsEnv:
         )
         config = RoomsScenarioConfig(spawn_config=spawn_config)
         env = NineRoomsEnv(scenario_config=config)
-        env.reset(seed=42)
+        observation, info = env.reset(seed=42)
+
+        rendered = env.render()
+        save_path = os.path.join(output_dir, "path_gaussian_nine_rooms.png")
+        assert rendered is not None
+        imageio.imwrite(save_path, rendered)
+        print(f"Saved path gaussian nine-rooms render to: {save_path}")
+        assert os.path.exists(save_path)
 
         topology = RoomTopology.nine_rooms(config.spawn_config.doorways)
-        assert len(env.scenario.lava_pos) == 9
-        assert len(env.scenario.hole_pos) == 9
+        assert len(env.scenario.lava_pos) == 18
+        assert len(env.scenario.hole_pos) == 18
 
         for i, lava_pos in enumerate(env.scenario.lava_pos):
-            expected_room = rooms[i]
+            expected_room = (rooms + rooms)[i]
             actual_room = topology.get_room(lava_pos)
             assert actual_room == expected_room, (
                 f"Lava {i} in '{actual_room}', expected '{expected_room}'"
             )
 
         for i, hole_pos in enumerate(env.scenario.hole_pos):
-            expected_room = rooms[i]
+            expected_room = (rooms + rooms)[i]
             actual_room = topology.get_room(hole_pos)
             assert actual_room == expected_room, (
                 f"Hole {i} in '{actual_room}', expected '{expected_room}'"
