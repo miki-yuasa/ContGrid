@@ -4,7 +4,7 @@ import warnings
 from typing import ClassVar, cast
 
 import numpy as np
-from absl.testing import absltest
+from absl.testing import absltest, parameterized
 
 from contgrid.core import Grid, WorldConfig
 from contgrid.envs.zone import (
@@ -16,15 +16,18 @@ from contgrid.envs.zone import (
     GaussianSpawnStrategy,
     ObjConfig,
     RandomSwapSpec,
+    RewardConfig,
     SpawnConfig,
+    SubtaskConfig,
     UniformRandomConfig,
     UniformRandomSpawnStrategy,
     ZoneEnv,
     ZoneScenario,
     ZoneScenarioConfig,
     ZoneSizeConfig,
+    ZoneType,
 )
-from contgrid.envs.zone.configs import ObsConfig, SubtaskConfig, ZoneType
+from contgrid.envs.zone.configs import ObsConfig
 
 _MAP_LAYOUT = [
     "############",
@@ -646,6 +649,184 @@ class TestAgentSpawningPerturbation(absltest.TestCase):
             frac_y = abs(agent_pos[1] - round(agent_pos[1]))
             self.assertLess(frac_x, 1e-6)
             self.assertLess(frac_y, 1e-6)
+
+
+class TestSubtaskConfig(parameterized.TestCase):
+    def test_single_obstacle(self) -> None:
+        cfg = SubtaskConfig(goal=ZoneType.YELLOW, obstacle=ZoneType.WHITE)
+        self.assertEqual(cfg.obstacle, [ZoneType.WHITE])
+
+    def test_single_obstacle_str(self) -> None:
+        cfg = SubtaskConfig(goal="yellow", obstacle="white")  # type: ignore[arg-type]
+        self.assertEqual(cfg.obstacle, [ZoneType.WHITE])
+
+    def test_multiple_obstacles(self) -> None:
+        cfg = SubtaskConfig(
+            goal=ZoneType.YELLOW,
+            obstacle=[ZoneType.WHITE, ZoneType.BLACK],
+        )
+        self.assertEqual(cfg.obstacle, [ZoneType.WHITE, ZoneType.BLACK])
+
+    def test_multiple_obstacles_str(self) -> None:
+        cfg = SubtaskConfig(
+            goal="yellow",  # type: ignore[arg-type]
+            obstacle=["white", "black"],  # type: ignore[arg-type]
+        )
+        self.assertEqual(cfg.obstacle, [ZoneType.WHITE, ZoneType.BLACK])
+
+    def test_no_obstacle(self) -> None:
+        cfg_none = SubtaskConfig(goal=ZoneType.YELLOW)
+        self.assertEqual(cfg_none.obstacle, [])
+
+        cfg_explicit_none = SubtaskConfig(
+            goal=ZoneType.YELLOW,
+            obstacle=None,  # ty: ignore[invalid-argument-type]
+        )
+        self.assertEqual(cfg_explicit_none.obstacle, [])
+
+        cfg_empty = SubtaskConfig(goal=ZoneType.YELLOW, obstacle=[])
+        self.assertEqual(cfg_empty.obstacle, [])
+
+    def test_goal_in_obstacles_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            SubtaskConfig(goal=ZoneType.YELLOW, obstacle=ZoneType.YELLOW)
+
+        with self.assertRaises(ValueError):
+            SubtaskConfig(
+                goal=ZoneType.YELLOW,
+                obstacle=[ZoneType.WHITE, ZoneType.YELLOW],
+            )
+
+    def test_duplicate_obstacles_deduplicated(self) -> None:
+        cfg = SubtaskConfig(
+            goal=ZoneType.YELLOW,
+            obstacle=[ZoneType.WHITE, ZoneType.WHITE],
+        )
+        self.assertEqual(cfg.obstacle, [ZoneType.WHITE])
+
+
+class TestZoneScenarioMultipleObstacles(absltest.TestCase):
+    def _create_env(
+        self,
+        subtask_seq: list[SubtaskConfig],
+        agent_start: tuple[float, float] = (1.5, 1.5),
+    ) -> ZoneEnv:
+        spawn_config = SpawnConfig(
+            agent=agent_start,
+            subtask_seq=subtask_seq,
+            yellow_zone=[ObjConfig(pos=(8.5, 1.5))],
+            white_zone=[ObjConfig(pos=(4.5, 1.5))],
+            black_zone=[ObjConfig(pos=(6.5, 1.5))],
+            red_zone=[ObjConfig(pos=(1.5, 8.5))],
+            zone_size=0.5,
+            agent_size=0.1,
+            spawn_method=FixedSpawnConfig(),
+        )
+        scenario_config = ZoneScenarioConfig(
+            spawn_config=spawn_config,
+            reward_config=RewardConfig(step_penalty=0.01),
+        )
+        world_config = WorldConfig(grid=Grid(layout=_MAP_LAYOUT))
+        env = ZoneEnv(
+            scenario_config=scenario_config, world_config=world_config
+        )
+        self.addCleanup(env.close)
+        return env
+
+    def test_multiple_obstacles_absorbing_first_obstacle(self) -> None:
+        subtask = SubtaskConfig(
+            goal=ZoneType.YELLOW,
+            obstacle=[ZoneType.WHITE, ZoneType.BLACK],
+            reward=50.0,
+            penalty=-10.0,
+            goal_absorbing=False,
+            obstacle_absorbing=True,
+        )
+        env = self._create_env([subtask])
+        env.reset(seed=42)
+
+        agent = env.world.agents[0]
+        # Move agent into White zone (first obstacle)
+        agent.state.pos = np.array([4.5, 1.5], dtype=np.float64)
+        reward = env.scenario.reward(agent, env.world)
+
+        self.assertAlmostEqual(reward, -10.0)
+        self.assertTrue(agent.terminated)
+
+    def test_multiple_obstacles_absorbing_second_obstacle(self) -> None:
+        subtask = SubtaskConfig(
+            goal=ZoneType.YELLOW,
+            obstacle=[ZoneType.WHITE, ZoneType.BLACK],
+            reward=50.0,
+            penalty=-10.0,
+            goal_absorbing=False,
+            obstacle_absorbing=True,
+        )
+        env = self._create_env([subtask])
+        env.reset(seed=42)
+
+        agent = env.world.agents[0]
+        # Move agent into Black zone (second obstacle)
+        agent.state.pos = np.array([6.5, 1.5], dtype=np.float64)
+        reward = env.scenario.reward(agent, env.world)
+
+        self.assertAlmostEqual(reward, -10.0)
+        self.assertTrue(agent.terminated)
+
+    def test_multiple_obstacles_non_absorbing_and_goal_reach(self) -> None:
+        subtask = SubtaskConfig(
+            goal=ZoneType.YELLOW,
+            obstacle=[ZoneType.WHITE, ZoneType.BLACK],
+            reward=50.0,
+            penalty=-5.0,
+            goal_absorbing=False,
+            obstacle_absorbing=False,
+        )
+        env = self._create_env([subtask])
+        env.reset(seed=42)
+
+        agent = env.world.agents[0]
+
+        # Enter White zone (obstacle 1)
+        agent.state.pos = np.array([4.5, 1.5], dtype=np.float64)
+        reward1 = env.scenario.reward(agent, env.world)
+        self.assertAlmostEqual(reward1, -5.0 - 0.01)
+        self.assertFalse(agent.terminated)
+
+        # Move to neutral location
+        agent.state.pos = np.array([5.5, 1.5], dtype=np.float64)
+        reward2 = env.scenario.reward(agent, env.world)
+        self.assertAlmostEqual(reward2, -0.01)
+        self.assertFalse(agent.terminated)
+
+        # Enter Black zone (obstacle 2)
+        agent.state.pos = np.array([6.5, 1.5], dtype=np.float64)
+        reward3 = env.scenario.reward(agent, env.world)
+        self.assertAlmostEqual(reward3, -5.0 - 0.01)
+        self.assertFalse(agent.terminated)
+
+        # Move into Yellow zone (goal)
+        agent.state.pos = np.array([8.5, 1.5], dtype=np.float64)
+        reward4 = env.scenario.reward(agent, env.world)
+        self.assertAlmostEqual(reward4, 50.0 - 0.01)
+        scenario = cast(ZoneScenario, env.scenario)
+        self.assertTrue(scenario.is_success)
+
+    def test_info_contains_obstacle_list(self) -> None:
+        subtask = SubtaskConfig(
+            goal=ZoneType.YELLOW,
+            obstacle=[ZoneType.WHITE, ZoneType.BLACK],
+        )
+        env = self._create_env([subtask])
+        _, info = env.reset(seed=42)
+
+        self.assertIn("current_subtask", info)
+        self.assertEqual(info["current_subtask"]["idx"], 0)
+        self.assertEqual(info["current_subtask"]["goal"], ZoneType.YELLOW)
+        self.assertEqual(
+            info["current_subtask"]["obstacle"],
+            [ZoneType.WHITE, ZoneType.BLACK],
+        )
 
 
 if __name__ == "__main__":

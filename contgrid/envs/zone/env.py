@@ -48,14 +48,14 @@ class ZoneEnvConfig(BaseModel):
 
 
 class ZoneEnv(BaseGymEnv[dict[str, NDArray], NDArray, ZoneScenarioConfig]):
-    """
-    Continuous multi-zone navigation environment.
+    """Continuous multi-zone navigation environment.
 
     The agent moves in a walled 2D world that contains color-coded zones
     (yellow, red, white, black). Tasks are defined as an ordered sequence in
     ``spawn_config.subtask_seq`` where each subtask specifies:
     - a goal zone that grants reward when visited,
-    - an optional obstacle zone that applies penalty when visited,
+    - an optional obstacle zone (or list of obstacle zones) that applies penalty
+      when visited,
     - whether goal/obstacle visits are absorbing.
 
     Observation:
@@ -69,14 +69,17 @@ class ZoneEnv(BaseGymEnv[dict[str, NDArray], NDArray, ZoneScenarioConfig]):
     Reward:
         - Step penalty while the agent remains active.
         - Subtask goal reward on entering the active goal zone.
-        - Subtask obstacle penalty on entering the active obstacle zone.
+        - Subtask obstacle penalty on entering an active obstacle zone.
 
     Episode Termination:
         - Agent enters an absorbing goal/obstacle zone.
         - Max episode steps reached.
     """
 
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
+    metadata = {  # noqa: RUF012
+        "render_modes": ["human", "rgb_array"],
+        "render_fps": 10,
+    }
 
     def __init__(
         self,

@@ -1,8 +1,9 @@
-"""Configuration classes for the Rooms environment."""
+from __future__ import annotations
 
 from enum import Enum
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 
 from contgrid.core.typing import Position
 
@@ -31,15 +32,48 @@ class ZoneType(str, Enum):
     BLACK = "black"
 
 
+def _normalize_obstacle(v: Any) -> list[Any]:
+    """Normalize single ZoneType, str, None, or sequence into a list."""
+    if v is None:
+        return []
+    if isinstance(v, (ZoneType, str)):
+        return [v]
+    if isinstance(v, (list, tuple, set)):
+        return list(dict.fromkeys(v))
+    return [v]
+
+
 class SubtaskConfig(BaseModel):
-    """Configuration for a single subtask (zone)."""
+    """Configuration for a single subtask (zone).
+
+    Attributes:
+        goal: The target zone type that the agent must reach.
+        obstacle: The obstacle zone(s) for this subtask (normalized to a list
+            of ZoneType).
+        reward: The reward given when the goal zone is reached.
+        penalty: The non-positive penalty applied when an obstacle zone is entered.
+        goal_absorbing: Whether entering the goal terminates the episode.
+        obstacle_absorbing: Whether entering any obstacle terminates the episode.
+    """
 
     goal: ZoneType
-    obstacle: ZoneType | None = None
+    obstacle: Annotated[
+        list[ZoneType],
+        BeforeValidator(_normalize_obstacle),
+    ] = Field(default_factory=list)
     reward: float = 0.0
     penalty: float = Field(default=0.0, le=0.0)
     goal_absorbing: bool = False
     obstacle_absorbing: bool = False
+
+    @model_validator(mode="after")
+    def _validate_goal_obstacle_overlap(self) -> SubtaskConfig:
+        """Ensure that the goal zone is not designated as an obstacle."""
+        if self.goal in self.obstacle:
+            raise ValueError(
+                f"Goal zone '{self.goal.value}' cannot also be an obstacle zone."
+            )
+        return self
 
 
 class ZoneSizeConfig(BaseModel):
@@ -88,10 +122,18 @@ class SpawnConfig(BaseModel):
             ),
         ]
     )
-    yellow_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
-    red_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
-    white_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
-    black_zone: list[ObjConfig] = Field(default_factory=lambda: [ObjConfig(pos=None)])
+    yellow_zone: list[ObjConfig] = Field(
+        default_factory=lambda: [ObjConfig(pos=None)]
+    )
+    red_zone: list[ObjConfig] = Field(
+        default_factory=lambda: [ObjConfig(pos=None)]
+    )
+    white_zone: list[ObjConfig] = Field(
+        default_factory=lambda: [ObjConfig(pos=None)]
+    )
+    black_zone: list[ObjConfig] = Field(
+        default_factory=lambda: [ObjConfig(pos=None)]
+    )
     agent_size: float = 0.1
     agent_perturbation: float = 0.25
     zone_size: float | ZoneSizeConfig = 0.5

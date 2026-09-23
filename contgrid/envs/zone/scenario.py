@@ -1,6 +1,5 @@
 """RoomsScenario implementation."""
 
-from contgrid.envs.zone.configs import ZoneSizeConfig
 from typing import Any
 
 import numpy as np
@@ -20,6 +19,7 @@ from contgrid.core import (
     rc2cell_pos,
 )
 from contgrid.core.typing import CellPosition, Position
+from contgrid.envs.zone.configs import ZoneSizeConfig
 
 from .configs import ZoneScenarioConfig, ZoneType
 from .observations import (
@@ -30,7 +30,7 @@ from .observations import (
 from .spawn import FixedSpawnConfig, SpawnManager
 
 
-class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64]]]):
+class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, Any]]):
     """Scenario for the Zones environment with multiple zones and doorways."""
 
     def __init__(
@@ -260,7 +260,12 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self._init_black = list(self.black)
         # Save original properties since post_spawn may mutate landmark objects
         self._init_landmark_props: dict[int, tuple[str, float, Color]] = {}
-        for lm in self._init_yellow + self._init_red + self._init_white + self._init_black:
+        for lm in (
+            self._init_yellow
+            + self._init_red
+            + self._init_white
+            + self._init_black
+        ):
             self._init_landmark_props[id(lm)] = (lm.name, lm.size, lm.color)
 
     def reset_world(self, world: World, np_random: np.random.Generator) -> None:
@@ -278,7 +283,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             world.agents = self.reset_agents(world, np_random)
         self._post_reset_world(world, np_random)
 
-    def _pre_reset_world(self, world: World, np_random: np.random.Generator) -> None:
+    def _pre_reset_world(
+        self, world: World, np_random: np.random.Generator
+    ) -> None:
         """Pre-reset initialization: prepare free_cells list and remove fixed obstacle positions."""
         assert self.config
         if not hasattr(self, "init_free_cells"):
@@ -313,7 +320,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         self.current_subtask_idx = 0
         self.is_success = len(self.config.spawn_config.subtask_seq) == 0
 
-    def reset_agents(self, world: World, np_random: np.random.Generator) -> list[Agent]:
+    def reset_agents(
+        self, world: World, np_random: np.random.Generator
+    ) -> list[Agent]:
         assert self.config
         for agent in world.agents:
             agent.reset(np_random)
@@ -329,9 +338,14 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                     for cell in self.free_cells:
                         cell_pos = np.array(cell, dtype=np.float64)
                         overlaps = False
-                        for lm in self.yellow + self.red + self.white + self.black:
+                        for lm in (
+                            self.yellow + self.red + self.white + self.black
+                        ):
                             min_dist = lm.size + agent_size
-                            if np.linalg.norm(cell_pos - lm.state.pos) < min_dist - 1e-9:
+                            if (
+                                np.linalg.norm(cell_pos - lm.state.pos)
+                                < min_dist - 1e-9
+                            ):
                                 overlaps = True
                                 break
                         if not overlaps:
@@ -339,22 +353,34 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
 
                 if valid_cells:
                     chose_cell = valid_cells[np_random.choice(len(valid_cells))]
-                    center_pos = np.array([chose_cell[0], chose_cell[1]], dtype=np.float64)
+                    center_pos = np.array(
+                        [chose_cell[0], chose_cell[1]], dtype=np.float64
+                    )
                     self.free_cells.remove(chose_cell)
                 else:
                     chose_cell_idx = np_random.choice(len(self.free_cells))
                     new_pos = self.free_cells[chose_cell_idx]
-                    center_pos = np.array([new_pos[0], new_pos[1]], dtype=np.float64)
+                    center_pos = np.array(
+                        [new_pos[0], new_pos[1]], dtype=np.float64
+                    )
                     self.free_cells.pop(chose_cell_idx)
 
                 # Perturb the selected center position
-                perturbation_limit = getattr(self.config.spawn_config, "agent_perturbation", 0.25)
+                perturbation_limit = getattr(
+                    self.config.spawn_config, "agent_perturbation", 0.25
+                )
                 perturbed_pos = center_pos
                 if perturbation_limit > 0:
                     for _ in range(100):
-                        dx = np_random.uniform(-perturbation_limit, perturbation_limit)
-                        dy = np_random.uniform(-perturbation_limit, perturbation_limit)
-                        candidate_pos = center_pos + np.array([dx, dy], dtype=np.float64)
+                        dx = np_random.uniform(
+                            -perturbation_limit, perturbation_limit
+                        )
+                        dy = np_random.uniform(
+                            -perturbation_limit, perturbation_limit
+                        )
+                        candidate_pos = center_pos + np.array(
+                            [dx, dy], dtype=np.float64
+                        )
 
                         # Check wall collision
                         if not world.wall_collision_checker.is_position_valid(
@@ -367,9 +393,14 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                         # Check zone overlap if reset_agent_first is False
                         if not self.config.spawn_config.reset_agent_first:
                             overlaps = False
-                            for lm in self.yellow + self.red + self.white + self.black:
+                            for lm in (
+                                self.yellow + self.red + self.white + self.black
+                            ):
                                 min_dist = lm.size + agent_size
-                                if np.linalg.norm(candidate_pos - lm.state.pos) < min_dist - 1e-9:
+                                if (
+                                    np.linalg.norm(candidate_pos - lm.state.pos)
+                                    < min_dist - 1e-9
+                                ):
                                     overlaps = True
                                     break
                             if overlaps:
@@ -390,7 +421,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         if self.config.spawn_config.reset_agent_first:
             agent_pos = world.agents[0].state.pos if world.agents else None
         elif self.config.spawn_config.agent is not None:
-            agent_pos = np.array(self.config.spawn_config.agent, dtype=np.float64)
+            agent_pos = np.array(
+                self.config.spawn_config.agent, dtype=np.float64
+            )
         else:
             agent_pos = None
 
@@ -418,7 +451,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         world.landmarks = self.yellow + self.red + self.white + self.black
         return world.landmarks
 
-    def _post_reset_world(self, world: World, np_random: np.random.Generator) -> None:
+    def _post_reset_world(
+        self, world: World, np_random: np.random.Generator
+    ) -> None:
         """Post-reset: find and cache closest obstacles to the agent."""
         agent = world.agents[0]
         self.closest_yellow_pos = self._find_closest_obstacle(
@@ -459,7 +494,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         return bool(np.any(distances < zone_size))
 
     def _update_visit_counts(self, agent_pos: NDArray[np.float64]) -> None:
-        in_yellow_zone = self._is_inside_zone(agent_pos, self.yellow_pos, "yellow")
+        in_yellow_zone = self._is_inside_zone(
+            agent_pos, self.yellow_pos, "yellow"
+        )
         in_red_zone = self._is_inside_zone(agent_pos, self.red_pos, "red")
         in_white_zone = self._is_inside_zone(agent_pos, self.white_pos, "white")
         in_black_zone = self._is_inside_zone(agent_pos, self.black_pos, "black")
@@ -500,7 +537,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         return zone_type_to_index[zone_type]
 
     def _find_closest_obstacle(
-        self, agent_pos: NDArray[np.float64], obstacle_positions: NDArray[np.float64]
+        self,
+        agent_pos: NDArray[np.float64],
+        obstacle_positions: NDArray[np.float64],
     ) -> NDArray[np.float64]:
         """Find the position of the closest obstacle to the agent."""
         if len(obstacle_positions) == 0:
@@ -529,8 +568,8 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         dists = np.linalg.norm(objects - pos, axis=1)
         return np.min(dists), np.argmin(dists, axis=0)
 
-    def observation(self, agent: Agent, world: World) -> dict[str, NDArray[np.float64]]:
-        obs = {}
+    def observation(self, agent: Agent, world: World) -> dict[str, Any]:
+        obs: dict[str, Any] = {}
         obs["agent_pos"] = agent.state.pos.copy() / self.room_scale
         obs["agent_vel"] = agent.state.vel.copy() / self.room_scale
         # Calculate wall distances in four cardinal directions: top, right, bottom, left
@@ -540,9 +579,13 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         obs |= self.red_dist_obs_factory.observation(agent, self.red_pos)
         obs |= self.white_dist_obs_factory.observation(agent, self.white_pos)
         obs |= self.black_dist_obs_factory.observation(agent, self.black_pos)
-        obs |= self.visit_count_obs_factory.observation(agent, self._get_visit_counts())
+        obs |= self.visit_count_obs_factory.observation(
+            agent, self._get_visit_counts()
+        )
         if self.config.obs_config.include_subtask:
-            obs |= self.subtask_obs_factory.observation(agent, self.current_subtask_idx)
+            obs |= self.subtask_obs_factory.observation(
+                agent, self.current_subtask_idx
+            )
         return obs
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
@@ -573,7 +616,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
             high_bound=rel_high_bound,
         )
         obs_space_dict |= self.red_dist_obs_factory.obs_space_dict(
-            num_zones=len(self.red), low_bound=rel_low_bound, high_bound=rel_high_bound
+            num_zones=len(self.red),
+            low_bound=rel_low_bound,
+            high_bound=rel_high_bound,
         )
         obs_space_dict |= self.white_dist_obs_factory.obs_space_dict(
             num_zones=len(self.white),
@@ -609,8 +654,8 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                 self.current_subtask_idx
             ]
 
-            if current_subtask.obstacle is not None:
-                obstacle_idx = self._zone_type_to_visit_index(current_subtask.obstacle)
+            for obstacle in current_subtask.obstacle:
+                obstacle_idx = self._zone_type_to_visit_index(obstacle)
                 obstacle_visited = (
                     current_visit_counts[obstacle_idx]
                     > previous_visit_counts[obstacle_idx]
@@ -619,6 +664,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
                     reward += current_subtask.penalty
                     if current_subtask.obstacle_absorbing:
                         agent.terminated = True
+                        break
 
             goal_idx = self._zone_type_to_visit_index(current_subtask.goal)
             goal_visited = (
@@ -650,7 +696,12 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         d_w, _ = self.get_closest(agent.state.pos, self.white_pos)
         d_b, _ = self.get_closest(agent.state.pos, self.black_pos)
 
-        info_dict["distances"] = {"yellow": d_y, "red": d_r, "white": d_w, "black": d_b}
+        info_dict["distances"] = {
+            "yellow": d_y,
+            "red": d_r,
+            "white": d_w,
+            "black": d_b,
+        }
 
         subtask_seq = self.config.spawn_config.subtask_seq
         info_dict["is_success"] = self.is_success
@@ -681,7 +732,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         return info_dict
 
     def _get_wall_distances(
-        self, agent_pos: NDArray[np.float64], wall_positions: NDArray[np.float64]
+        self,
+        agent_pos: NDArray[np.float64],
+        wall_positions: NDArray[np.float64],
     ) -> NDArray[np.float64]:
         """Calculate distances to the nearest wall in four cardinal directions.
 
@@ -713,7 +766,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         # Top: x-aligned walls whose bottom edge is above the agent
         top_mask = x_aligned & (w_min_y > agent_y)
         top_dist = (
-            float(np.min(w_min_y[top_mask] - agent_y)) if np.any(top_mask) else np.inf
+            float(np.min(w_min_y[top_mask] - agent_y))
+            if np.any(top_mask)
+            else np.inf
         )
 
         # Bottom: x-aligned walls whose top edge is below the agent
@@ -735,7 +790,9 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
         # Left: y-aligned walls whose right edge is to the left of agent
         left_mask = y_aligned & (w_max_x < agent_x)
         left_dist = (
-            float(np.min(agent_x - w_max_x[left_mask])) if np.any(left_mask) else np.inf
+            float(np.min(agent_x - w_max_x[left_mask]))
+            if np.any(left_mask)
+            else np.inf
         )
 
         wall_dists = np.array(
@@ -800,7 +857,7 @@ class ZoneScenario(BaseScenario[ZoneScenarioConfig, dict[str, NDArray[np.float64
 
             for direction, is_blocked in blocked_directions.items():
                 if is_blocked:
-                    prohibited.append(action_indices[direction])
+                    prohibited.append(int(action_indices[direction]))
         # For action spaces not divisible by 4, return empty list as mapping is unclear
 
         return prohibited
