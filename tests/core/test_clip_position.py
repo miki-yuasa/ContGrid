@@ -1,95 +1,44 @@
-#!/usr/bin/env python3
-"""
-Simple test script for the clip_new_position method
-"""
+from __future__ import annotations
 
 import numpy as np
+from absl.testing import absltest, parameterized
+
 from contgrid.core.grid import WallCollisionChecker
 
-def test_clip_new_position():
-    """Test the clip_new_position method with various scenarios"""
-    
-    # Create a simple 3x3 grid with walls around the border
-    layout = [
-        "###",
-        "#0#", 
-        "###"
-    ]
-    
-    L = 0.1  # Cell size
-    checker = WallCollisionChecker(layout, L, verbose=True)
-    
-    R = 0.02  # Robot radius
-    allowed_overlap = 0.01  # Small allowed overlap
-    
-    print("Testing analytical clip_new_position method...")
-    print(f"Grid layout: {layout}")
-    print(f"Cell size: {L}, Robot radius: {R}, Allowed overlap: {allowed_overlap}")
-    print()
-    
-    # Test case 1: Valid movement within free space
-    curr_pos = (0.0, 0.0)  # Center of middle cell
-    new_pos = (0.02, 0.02)  # Small movement within free space
-    clipped = checker.clip_new_position(R, allowed_overlap, curr_pos, new_pos)
-    print("Test 1 - Valid movement:")
-    print(f"  Current: {curr_pos}, New: {new_pos}")
-    print(f"  Clipped: {clipped}")
-    print(f"  Should be same as new_pos: {np.allclose(clipped, new_pos)}")
-    print()
-    
-    # Test case 2: Movement that would collide with wall
-    curr_pos = (0.0, 0.0)  # Center of middle cell
-    new_pos = (0.08, 0.0)  # Try to move close to right wall
-    clipped = checker.clip_new_position(R, allowed_overlap, curr_pos, new_pos)
-    print("Test 2 - Movement towards wall:")
-    print(f"  Current: {curr_pos}, New: {new_pos}")
-    print(f"  Clipped: {clipped}")
-    print(f"  Clipped should be between current and new: {curr_pos[0] <= clipped[0] <= new_pos[0]}")
-    print(f"  Clipped position valid: {checker.is_position_valid(R, allowed_overlap, clipped)}")
-    print()
-    
-    # Test case 3: No movement
-    curr_pos = (0.0, 0.0)
-    new_pos = (0.0, 0.0)
-    clipped = checker.clip_new_position(R, allowed_overlap, curr_pos, new_pos)
-    print("Test 3 - No movement:")
-    print(f"  Current: {curr_pos}, New: {new_pos}")
-    print(f"  Clipped: {clipped}")
-    print(f"  Should be same as current: {np.allclose(clipped, curr_pos)}")
-    print()
-    
-    # Test case 4: Movement in negative direction
-    curr_pos = (0.0, 0.0)
-    new_pos = (-0.08, 0.0)  # Try to move close to left wall
-    clipped = checker.clip_new_position(R, allowed_overlap, curr_pos, new_pos)
-    print("Test 4 - Movement towards left wall:")
-    print(f"  Current: {curr_pos}, New: {new_pos}")
-    print(f"  Clipped: {clipped}")
-    print(f"  Clipped should be between new and current: {new_pos[0] <= clipped[0] <= curr_pos[0]}")
-    print(f"  Clipped position valid: {checker.is_position_valid(R, allowed_overlap, clipped)}")
-    print()
-    
-    # Test case 5: Diagonal movement towards corner
-    curr_pos = (0.0, 0.0)
-    new_pos = (0.08, 0.08)  # Try to move towards top-right
-    clipped = checker.clip_new_position(R, allowed_overlap, curr_pos, new_pos)
-    print("Test 5 - Diagonal movement towards corner:")
-    print(f"  Current: {curr_pos}, New: {new_pos}")
-    print(f"  Clipped: {clipped}")
-    print(f"  Clipped position valid: {checker.is_position_valid(R, allowed_overlap, clipped)}")
-    print()
-    
-    # Test case 6: Test analytical approach efficiency
-    import time
-    print("Performance test:")
-    start_time = time.time()
-    for i in range(1000):
-        test_pos = (0.0, 0.0)
-        target_pos = (0.05 + i * 0.0001, 0.05 + i * 0.0001)
-        clipped = checker.clip_new_position(R, allowed_overlap, test_pos, target_pos)
-    end_time = time.time()
-    print(f"  1000 clip operations took: {(end_time - start_time) * 1000:.2f} ms")
-    print(f"  Average per operation: {(end_time - start_time) * 1000000 / 1000:.2f} μs")
+
+class ClipPositionTest(parameterized.TestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        layout = ["###", "#0#", "###"]
+        self.checker = WallCollisionChecker(layout, L=0.1, verbose=False)
+        self.robot_radius = 0.02
+        self.allowed_overlap = 0.01
+
+    @parameterized.named_parameters(
+        ("free_space", (0.1, 0.1), (0.12, 0.12), True),
+        ("zero_movement", (0.1, 0.1), (0.1, 0.1), True),
+        ("positive_wall", (0.1, 0.1), (0.18, 0.1), False),
+        ("negative_wall", (0.1, 0.1), (0.02, 0.1), False),
+        ("diagonal_corner", (0.1, 0.1), (0.18, 0.18), False),
+    )
+    def test_clip_new_position(
+        self,
+        curr_pos: tuple[float, float],
+        new_pos: tuple[float, float],
+        expect_unclipped: bool,
+    ) -> None:
+        clipped = self.checker.clip_new_position(
+            self.robot_radius, self.allowed_overlap, curr_pos, new_pos
+        )
+        if expect_unclipped:
+            np.testing.assert_allclose(clipped, new_pos)
+        else:
+            self.assertTrue(
+                self.checker.is_position_valid(
+                    self.robot_radius, self.allowed_overlap, clipped
+                )
+            )
+
 
 if __name__ == "__main__":
-    test_clip_new_position()
+    absltest.main()

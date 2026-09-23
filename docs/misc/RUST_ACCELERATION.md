@@ -69,7 +69,7 @@ maturin develop --release
 
 ```bash
 # Run all tests (including Rust integration)
-pytest
+python -m unittest discover -s tests -t . -p "test_*.py"
 
 # Run only Rust-specific tests
 python tests/test_rust_integration.py

@@ -1,9 +1,8 @@
-import os
+from __future__ import annotations
 
 import numpy as np
-import pytest
+from absl.testing import absltest
 from gymnasium import spaces
-from PIL import Image
 from pydantic import BaseModel
 
 from contgrid.contgrid import BaseEnv
@@ -18,13 +17,12 @@ class DummyScenarioConfig(BaseModel):
 
 
 class SimpleScenario(BaseScenario[DummyScenarioConfig, np.ndarray]):
-    """A simple test scenario with one agent and one landmark"""
-
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(config=DummyScenarioConfig())
 
-    def init_agents(self, world: World, np_random=None) -> list[Agent]:
-        """Initialize a single agent in the world"""
+    def init_agents(
+        self, world: World, np_random: np.random.Generator | None = None
+    ) -> list[Agent]:
         agent = Agent(
             name="agent_0",
             size=0.25,
@@ -36,8 +34,9 @@ class SimpleScenario(BaseScenario[DummyScenarioConfig, np.ndarray]):
         )
         return [agent]
 
-    def init_landmarks(self, world: World, np_random=None) -> list[Landmark]:
-        """Initialize a single landmark in the world"""
+    def init_landmarks(
+        self, world: World, np_random: np.random.Generator | None = None
+    ) -> list[Landmark]:
         landmark = Landmark(
             name="landmark_0",
             size=0.5,
@@ -49,26 +48,25 @@ class SimpleScenario(BaseScenario[DummyScenarioConfig, np.ndarray]):
         )
         return [landmark]
 
-    def reset_agents(self, world: World, np_random) -> list[Agent]:
-        """Reset agent positions"""
+    def reset_agents(
+        self, world: World, np_random: np.random.Generator
+    ) -> list[Agent]:
         for agent in world.agents:
             agent.state.pos = np.array([1, 1], dtype=np.float64)
             agent.state.vel = np.array([0.0, 0.0], dtype=np.float64)
         return world.agents
 
-    def reset_landmarks(self, world: World, np_random) -> list[Landmark]:
-        """Reset landmark positions"""
+    def reset_landmarks(
+        self, world: World, np_random: np.random.Generator
+    ) -> list[Landmark]:
         for landmark in world.landmarks:
             landmark.state.pos = np.array([2, 3], dtype=np.float64)
             landmark.state.vel = np.array([0.0, 0.0], dtype=np.float64)
         return world.landmarks
 
     def observation(self, agent: Agent, world: World) -> np.ndarray:
-        """Simple observation: agent position and landmark position"""
-        obs = []
-        # Agent's own position
+        obs: list[float] = []
         obs.extend(agent.state.pos)
-        # Landmark position
         if world.landmarks:
             obs.extend(world.landmarks[0].state.pos)
         else:
@@ -76,108 +74,52 @@ class SimpleScenario(BaseScenario[DummyScenarioConfig, np.ndarray]):
         return np.array(obs, dtype=np.float64)
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
-        """Define observation space"""
-        return spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32)
+        return spaces.Box(
+            low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32
+        )
 
 
-class TestEnvironmentRendering:
-    """Test class for environment rendering functionality"""
-
-    def test_render_default_environment_and_save_png(self):
-        """Test rendering the default environment and saving it as PNG"""
-        # Create a simple scenario
+class TestEnvironmentRendering(absltest.TestCase):
+    def test_render_default_environment(self) -> None:
         scenario = SimpleScenario()
-
-        # Create environment with rgb_array render mode
         env = BaseEnv(scenario=scenario, max_cycles=10)
-
-        # Reset environment
         env.reset(seed=42)
 
-        # Render the environment
         rendered_image = env.render()
+        self.assertIsNotNone(rendered_image)
+        assert rendered_image is not None
+        self.assertEqual(rendered_image.ndim, 3)
+        self.assertEqual(rendered_image.shape[2], 3)
+        self.assertEqual(rendered_image.dtype, np.uint8)
 
-        # Verify the rendered image is not None and has correct shape
-        assert rendered_image is not None, "Rendered image should not be None"
-        assert len(rendered_image.shape) == 3, (
-            "Image should be 3D (height, width, channels)"
-        )
-        assert rendered_image.shape[2] == 3, "Image should have 3 color channels (RGB)"
-
-        # Save numpy array as PNG using PIL
-        # rendered_image is in format (height, width, channels)
-        height, width, channels = rendered_image.shape
-
-        # Create PIL Image from numpy array
-        pil_image = Image.fromarray(rendered_image.astype(np.uint8))
-
-        # Save as PNG
-        output_path = os.path.join("tests", "out", "plots", "default_environment.png")
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        pil_image.save(output_path)
-
-        # Verify file was created
-        assert os.path.exists(output_path), (
-            f"PNG file should be created at {output_path}"
-        )
-
-        # Verify file is not empty
-        assert os.path.getsize(output_path) > 0, "PNG file should not be empty"
-
-        # Clean up
         env.close()
 
-        print(f"Successfully rendered and saved environment to {output_path}")
-
-    def test_render_with_multiple_steps(self):
-        """Test rendering environment after taking a few steps"""
+    def test_render_with_multiple_steps(self) -> None:
         scenario = SimpleScenario()
         env = BaseEnv(scenario=scenario, max_cycles=10)
-
-        # Reset environment
         env.reset(seed=42)
 
-        # Take a few steps with random actions
-        for step in range(3):
+        for _ in range(3):
             if env.agents:
-                # Get a valid action for the current agent
                 agent_name = env.agent_selection
                 action_space = env.action_space(agent_name)
                 if hasattr(action_space, "sample"):
                     action = action_space.sample()
-                    # action = np.array([-3, 10])  # Simple movement
-
                 else:
-                    action = np.array([0.1, 0.1])  # Simple movement
-
-                print(f"Step {step + 1}, Action: {action}")
-
+                    action = np.array([0.1, 0.1], dtype=np.float64)
                 env.step(action)
 
-        # Render the environment after steps
         rendered_image = env.render()
-
-        # Verify rendering still works
+        self.assertIsNotNone(rendered_image)
         assert rendered_image is not None
-        assert len(rendered_image.shape) == 3
+        self.assertEqual(rendered_image.ndim, 3)
+        self.assertEqual(rendered_image.shape[2], 3)
 
-        # Save stepped environment
-        height, width, channels = rendered_image.shape
-        pil_image = Image.fromarray(rendered_image.astype(np.uint8))
-
-        output_path = os.path.join("tests", "out", "plots", "stepped_environment.png")
-        pil_image.save(output_path)
-
-        assert os.path.exists(output_path)
         env.close()
 
-        print(f"Successfully rendered stepped environment to {output_path}")
 
-
-class TestAllPossibleStates:
-    """Tests for state enumeration helpers on BaseEnv."""
-
-    def test_all_possible_states_matches_free_cells(self):
+class TestAllPossibleStates(absltest.TestCase):
+    def test_all_possible_states_matches_free_cells(self) -> None:
         scenario = SimpleScenario()
         env = BaseEnv(scenario=scenario, max_cycles=10)
         env.reset(seed=42)
@@ -187,39 +129,50 @@ class TestAllPossibleStates:
         expected_free_cells = sum(cell != "#" for row in layout for cell in row)
 
         for agent_name in env.possible_agents:
-            assert len(states[agent_name]) == expected_free_cells
+            self.assertEqual(len(states[agent_name]), expected_free_cells)
 
         env.close()
 
-    def test_all_possible_states_at_resolution_one_matches_legacy(self):
+    def test_all_possible_states_at_resolution_one_matches_legacy(self) -> None:
         scenario = SimpleScenario()
         env = BaseEnv(scenario=scenario, max_cycles=10)
         env.reset(seed=42)
 
         legacy_states = env.all_possible_states()
-        sampled_states = env.all_possible_states_at_resolution(env.grid.cell_size)
+        sampled_states = env.all_possible_states_at_resolution(
+            env.grid.cell_size
+        )
 
         for agent_name in env.possible_agents:
-            assert set(sampled_states[agent_name].keys()) == set(
-                legacy_states[agent_name].keys()
+            self.assertSetEqual(
+                set(sampled_states[agent_name].keys()),
+                set(legacy_states[agent_name].keys()),
             )
 
         env.close()
 
-    def test_all_possible_states_at_finer_resolution_has_more_samples(self):
+    def test_all_possible_states_at_finer_resolution_has_more_samples(
+        self,
+    ) -> None:
         scenario = SimpleScenario()
         env = BaseEnv(scenario=scenario, max_cycles=10)
         env.reset(seed=42)
 
         legacy_states = env.all_possible_states()
-        finer_states = env.all_possible_states_at_resolution(env.grid.cell_size / 2)
+        finer_states = env.all_possible_states_at_resolution(
+            env.grid.cell_size / 2
+        )
 
         for agent_name in env.possible_agents:
-            assert len(finer_states[agent_name]) > len(legacy_states[agent_name])
+            self.assertGreater(
+                len(finer_states[agent_name]), len(legacy_states[agent_name])
+            )
 
         env.close()
 
-    def test_all_possible_states_at_resolution_restores_agent_position(self):
+    def test_all_possible_states_at_resolution_restores_agent_position(
+        self,
+    ) -> None:
         scenario = SimpleScenario()
         env = BaseEnv(scenario=scenario, max_cycles=10)
         env.reset(seed=42)
@@ -230,26 +183,31 @@ class TestAllPossibleStates:
         env.all_possible_states_at_resolution((0.5, 1.0))
 
         for agent in env.world.agents:
-            np.testing.assert_allclose(agent.state.pos, original_positions[agent.name])
+            np.testing.assert_allclose(
+                agent.state.pos, original_positions[agent.name]
+            )
 
         env.close()
 
-    def test_all_possible_states_at_resolution_rejects_non_positive_spacing(self):
+    def test_all_possible_states_at_resolution_rejects_non_positive_spacing(
+        self,
+    ) -> None:
         scenario = SimpleScenario()
         env = BaseEnv(scenario=scenario, max_cycles=10)
         env.reset(seed=42)
 
-        with pytest.raises(ValueError, match="resolution steps must be positive"):
+        with self.assertRaisesRegex(
+            ValueError, "resolution steps must be positive"
+        ):
             env.all_possible_states_at_resolution(0.0)
 
-        with pytest.raises(ValueError, match="resolution steps must be positive"):
+        with self.assertRaisesRegex(
+            ValueError, "resolution steps must be positive"
+        ):
             env.all_possible_states_at_resolution((0.5, -1.0))
 
         env.close()
 
 
 if __name__ == "__main__":
-    # Allow running the test directly
-    test_instance = TestEnvironmentRendering()
-    test_instance.test_render_default_environment_and_save_png()
-    test_instance.test_render_with_multiple_steps()
+    absltest.main()
