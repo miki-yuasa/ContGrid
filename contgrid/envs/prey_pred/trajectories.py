@@ -28,25 +28,11 @@ class BaseTrajectory(ABC):
     def get_state(
         self, t: float
     ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-        """Compute entity position and velocity at time t.
-
-        Args:
-            t: Simulation time in seconds.
-
-        Returns:
-            Tuple of (pos, vel) as 1D float64 arrays of shape (2,).
-        """
+        """Compute entity position and velocity at time t."""
 
     @abstractmethod
     def get_path_waypoints(self, num_points: int = 100) -> list[Position]:
-        """Generate sampled waypoint coordinates along one full period for rendering.
-
-        Args:
-            num_points: Number of points to sample.
-
-        Returns:
-            List of (x, y) coordinates defining the trajectory path.
-        """
+        """Generate sampled waypoint coordinates along one period for rendering."""
 
 
 class StationaryTrajectory(BaseTrajectory):
@@ -75,12 +61,19 @@ class LinearPatrolTrajectory(BaseTrajectory):
         self.center = np.array(center, dtype=np.float64)
         self.amplitude = config.amplitude
         self.speed = config.speed
-        self.omega = (self.speed / self.amplitude) if self.amplitude > 0 else 0.0
+        self.omega = (
+            (self.speed / self.amplitude) if self.amplitude > 0 else 0.0
+        )
         self.phase = config.phase
 
         d = 1.0 / math.sqrt(2.0)
-        dirs = {"horizontal": (1.0, 0.0), "vertical": (0.0, 1.0), "diagonal": (d, d)}
-        self.dir = np.array(dirs.get(config.axis, (1.0, 0.0)), dtype=np.float64)
+        dirs = {
+            "horizontal": (1.0, 0.0),
+            "vertical": (0.0, 1.0),
+            "diagonal": (d, d),
+            "reverse_diagonal": (-d, d),
+        }
+        self.dir = np.array(dirs[config.axis], dtype=np.float64)
 
     def get_state(
         self, t: float
@@ -135,8 +128,10 @@ class CircularOrbitTrajectory(BaseTrajectory):
         pos = center + self.radius * np.array(
             [math.cos(theta), math.sin(theta)], dtype=np.float64
         )
-        vel = self.speed * self.sign * np.array(
-            [-math.sin(theta), math.cos(theta)], dtype=np.float64
+        vel = (
+            self.speed
+            * self.sign
+            * np.array([-math.sin(theta), math.cos(theta)], dtype=np.float64)
         )
         return pos, vel
 

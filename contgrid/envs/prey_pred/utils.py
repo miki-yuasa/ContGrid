@@ -2,16 +2,29 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Sequence
 from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
-from contgrid.core import Color, EntityShape, EntityState, Landmark, World
+from contgrid.core import (
+    Color,
+    Entity,
+    EntityShape,
+    EntityState,
+    Landmark,
+    World,
+)
 from contgrid.core.typing import Position
 
-from .configs import CircularOrbitTrajectoryConfig, RegionEntityConfig
+from .configs import (
+    AgentSpawnConfig,
+    CircularOrbitTrajectoryConfig,
+    RegionEntityConfig,
+)
 from .trajectories import BaseTrajectory, create_trajectory
 
 PREY_COLORS: list[Color] = [
@@ -42,35 +55,16 @@ def _resolve_spawn_pos(
     spawn_pos: Position | Literal["center", "random"],
     reg_center: Position,
 ) -> Position:
-    """Resolve configured spawn position to concrete 2D coordinates.
-
-    Args:
-        spawn_pos: Configured placement ("center", "random", or coordinate tuple).
-        reg_center: Center position of the region.
-
-    Returns:
-        Concrete (x, y) position tuple.
-    """
-    match spawn_pos:
-        case "center":
-            return reg_center
-        case "random":
-            return reg_center
-        case (x, y):
-            return (float(x), float(y))
+    """Resolve configured spawn position to concrete 2D coordinates."""
+    if isinstance(spawn_pos, tuple):
+        return (float(spawn_pos[0]), float(spawn_pos[1]))
+    return reg_center
 
 
 def build_region_entities(
     reg: RegionEntityConfig,
 ) -> tuple[Landmark, BaseTrajectory, Landmark, BaseTrajectory]:
-    """Instantiate Prey, Predator, and their trajectories for a region.
-
-    Args:
-        reg: Region entity configuration.
-
-    Returns:
-        Tuple of (prey_landmark, prey_trajectory, pred_landmark, pred_trajectory).
-    """
+    """Instantiate Prey, Predator, and their trajectories for a region."""
     rid = reg.region_id
     min_x, max_x, min_y, max_y = reg.bounds
     reg_center: Position = ((min_x + max_x) / 2.0, (min_y + max_y) / 2.0)
@@ -89,11 +83,11 @@ def build_region_entities(
 
     q_pos = _resolve_spawn_pos(reg.predator.spawn_pos, reg_center)
     orbit_center = reg_center
-    if isinstance(reg.predator.trajectory, CircularOrbitTrajectoryConfig):
-        if reg.predator.trajectory.orbit_center == "region_center":
-            orbit_center = reg_center
-        elif isinstance(reg.predator.trajectory.orbit_center, tuple):
-            orbit_center = reg.predator.trajectory.orbit_center
+    if (
+        isinstance(reg.predator.trajectory, CircularOrbitTrajectoryConfig)
+        and isinstance(reg.predator.trajectory.orbit_center, tuple)
+    ):
+        orbit_center = reg.predator.trajectory.orbit_center
 
     q_traj = create_trajectory(
         reg.predator.trajectory,
@@ -193,7 +187,69 @@ def sample_neutral_corridor(
             agent_size, world.contact_margin, (cx, cy)
         ):
             return (cx, cy)
-    return (7.0, 7.0)
+    raise RuntimeError(
+        f"Failed to sample a neutral corridor position after {max_attempts} attempts."
+    )
+
+
+def sample_random_agent_pos(
+    world: World,
+    agent_size: float,
+    entities: Sequence[Entity],
+    np_random: np.random.Generator,
+    max_attempts: int = 500,
+    min_clearance: float = 0.0,
+) -> Position:
+    """Sample a random collision-free agent position avoiding preys and predators."""
+    min_x = min_y = 0.5 + agent_size
+    max_x = world.grid.width - 1.5 - agent_size
+    max_y = world.grid.height - 1.5 - agent_size
+
+    for _ in range(max_attempts):
+        cx = float(np_random.uniform(min_x, max_x))
+        cy = float(np_random.uniform(min_y, max_y))
+
+        if not world.wall_collision_checker.is_position_valid(
+            agent_size, world.contact_margin, (cx, cy)
+        ):
+            continue
+
+        overlap = False
+        for entity in entities:
+            dist = math.hypot(cx - entity.state.pos[0], cy - entity.state.pos[1])
+            if dist < (agent_size + entity.size + min_clearance):
+                overlap = True
+                break
+
+        if not overlap:
+            return (cx, cy)
+
+    raise RuntimeError(
+        f"Failed to sample a collision-free agent position after {max_attempts} attempts."
+    )
+
+
+def resolve_agent_spawn_pos(
+    world: World,
+    agent_size: float,
+    cfg: AgentSpawnConfig,
+    entities: Sequence[Entity],
+    np_random: np.random.Generator,
+) -> Position:
+    """Resolve initial agent spawn position based on the configured mode."""
+    match cfg.mode:
+        case "neutral_corridor":
+            return sample_neutral_corridor(world, agent_size, np_random)
+        case "random":
+            return sample_random_agent_pos(
+                world, agent_size, entities, np_random, min_clearance=cfg.min_clearance
+            )
+        case "fixed":
+            if cfg.fixed_pos is None:
+                raise ValueError("fixed_pos must be configured when mode is 'fixed'.")
+            return cfg.fixed_pos
+        case _:
+            raise ValueError(f"Unknown agent spawn mode: {cfg.mode}")
 
 
 def compute_wall_distances(
@@ -221,15 +277,10 @@ def compute_wall_distances(
 
     top_m = x_al & (w_min_y > ay)
     top_d = float(np.min(w_min_y[top_m] - ay)) if np.any(top_m) else np.inf
-
     bot_m = x_al & (w_max_y < ay)
     bot_d = float(np.min(ay - w_max_y[bot_m])) if np.any(bot_m) else np.inf
-
     right_m = y_al & (w_min_x > ax)
-    right_d = (
-        float(np.min(w_min_x[right_m] - ax)) if np.any(right_m) else np.inf
-    )
-
+    right_d = float(np.min(w_min_x[right_m] - ax)) if np.any(right_m) else np.inf
     left_m = y_al & (w_max_x < ax)
     left_d = float(np.min(ax - w_max_x[left_m])) if np.any(left_m) else np.inf
 

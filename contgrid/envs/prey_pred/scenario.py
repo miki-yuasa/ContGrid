@@ -17,7 +17,6 @@ from contgrid.core import (
     World,
     WorldConfig,
 )
-from contgrid.core.typing import Position
 
 from .configs import (
     DEFAULT_SCENARIO_CONFIG,
@@ -37,7 +36,7 @@ from .utils import (
     build_region_entities,
     compute_wall_distances,
     enforce_bounds_and_clearance,
-    sample_neutral_corridor,
+    resolve_agent_spawn_pos,
 )
 
 
@@ -118,11 +117,9 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
         self, world: World, np_random: np.random.Generator
     ) -> list[Agent]:
         agent = world.agents[0]
-        cfg = self.config.agent_spawn
-        pos: Position = (
-            sample_neutral_corridor(world, agent.size, np_random)
-            if cfg.mode == "neutral_corridor"
-            else (cfg.fixed_pos if cfg.fixed_pos is not None else (7.0, 7.0))
+        pos = resolve_agent_spawn_pos(
+            world, agent.size, self.config.agent_spawn,
+            self.preys + self.predators, np_random,
         )
 
         agent.state.pos = np.array(pos, dtype=np.float64)

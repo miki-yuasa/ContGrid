@@ -106,7 +106,7 @@ def run_demo(
             print(
                 f"Episode ended at step {step + 1} "
                 f"(terminated={terminated}, truncated={truncated}, "
-                f"success={info.get('is_success', False)})"
+                f"success={info['is_success']})"
             )
             break
 

@@ -17,7 +17,10 @@ The environment features a continuous 15×15 unit grid bounded by unit-thickness
 | **Region 2** | Top-Left | $[1.5, 5.5] \times [8.5, 12.5]$ | $(3.5, 10.5)$ | Waypoint Patrol Prey, Fixed Predator |
 | **Region 3** | Top-Right | $[8.5, 12.5] \times [8.5, 12.5]$ | $(10.5, 10.5)$ | Fixed Prey, Lissajous Figure-8 Predator |
 
-The agent spawns on neutral ground in the central corridors ($x \in [5.5, 8.5]$ or $y \in [5.5, 8.5]$).
+Agent spawning is configured via `AgentSpawnConfig`:
+- **`"neutral_corridor"`** (default): Spawns on neutral ground in the central corridors ($x \in [5.5, 8.5]$ or $y \in [5.5, 8.5]$).
+- **`"random"`**: Spawns uniformly anywhere across the playable map while strictly avoiding walls and maintaining non-overlapping clearance from all preys and predators.
+- **`"fixed"`**: Spawns at user-configured fixed coordinates (`fixed_pos`).
 
 ---
 

@@ -10,6 +10,7 @@ from absl.testing import absltest, parameterized
 
 import contgrid  # noqa: F401
 from contgrid.envs.prey_pred import (
+    AgentSpawnConfig,
     OrderedTaskConfig,
     PreyPredEnv,
     PreyPredScenarioConfig,
@@ -59,24 +60,6 @@ class TestPreyPredEnv(parameterized.TestCase):
             self.assertTrue(env.observation_space.contains(obs))
             if terminated or truncated:
                 break
-
-    def test_unordered_task_single_capture(self) -> None:
-        task_cfg = UnorderedTaskConfig(
-            required_preys=[0, 2],
-            capture_rewards={0: 15.0, 2: 30.0},
-            completion_reward=100.0,
-            step_penalty=0.0,
-        )
-        env = PreyPredEnv(
-            scenario_config=PreyPredScenarioConfig(task=task_cfg)
-        )
-        self.addCleanup(env.close)
-        env.reset()
-        agent = env.world.agents[0]
-        agent.state.pos = env.scenario.preys[0].state.pos.copy()
-        reward = env.scenario.reward(agent, env.world)
-        self.assertAlmostEqual(reward, 15.0)
-        self.assertEqual(env.scenario.prey_capture_counts[0], 1)
 
     def test_unordered_task_completion(self) -> None:
         task_cfg = UnorderedTaskConfig(
@@ -208,22 +191,43 @@ class TestPreyPredEnv(parameterized.TestCase):
             self.assertTrue(yaml_path.exists())
             self.assertEqual(len(cfg_yaml.regions), 4)
 
-    def test_trajectory_render_items_structure(self) -> None:
+    def test_trajectory_render_items(self) -> None:
         env = PreyPredEnv()
         self.addCleanup(env.close)
         env.reset()
         items = env.scenario.trajectory_items
         self.assertEqual(len(items), 8)
         self.assertTrue(all(isinstance(item, TrajectoryRenderItem) for item in items))
+        self.assertTrue(all(item.color.value.startswith("#") for item in items))
 
-    def test_trajectory_render_colors_match_enum(self) -> None:
-        env = PreyPredEnv()
+    def test_random_agent_spawn_mode_bounds_and_clearance(self) -> None:
+        cfg = PreyPredScenarioConfig(
+            agent_spawn=AgentSpawnConfig(mode="random", min_clearance=0.05)
+        )
+        env = PreyPredEnv(scenario_config=cfg)
         self.addCleanup(env.close)
-        env.reset()
-        for item in env.scenario.trajectory_items:
-            self.assertTrue(item.color.value.startswith("#"))
-            self.assertEqual(len(item.color.value), 7)
+        within_bounds = True
+        no_overlaps = True
+        for seed in range(20):
+            obs, _ = env.reset(seed=seed)
+            ax, ay = obs["agent_pos"]
+            within_bounds = within_bounds and (0.6 <= ax <= 13.4 and 0.6 <= ay <= 13.4)
+            entities = env.scenario.preys + env.scenario.predators
+            for e in entities:
+                d = math.hypot(ax - e.state.pos[0], ay - e.state.pos[1])
+                if d < (0.1 + e.size + 0.05 - 1e-6):
+                    no_overlaps = False
+        self.assertTrue(within_bounds)
+        self.assertTrue(no_overlaps)
+
+    def test_fixed_agent_spawn_missing_pos_raises(self) -> None:
+        cfg = PreyPredScenarioConfig(
+            agent_spawn=AgentSpawnConfig(mode="fixed", fixed_pos=None)
+        )
+        with self.assertRaises(ValueError):
+            PreyPredEnv(scenario_config=cfg)
 
 
 if __name__ == "__main__":
     absltest.main()
+

@@ -38,7 +38,9 @@ class LinearPatrolTrajectoryConfig(BaseModel):
     """Configuration for an oscillating linear patrol trajectory."""
 
     type: Literal["linear_patrol"] = "linear_patrol"
-    axis: Literal["horizontal", "vertical", "diagonal"] = "horizontal"
+    axis: Literal["horizontal", "vertical", "diagonal", "reverse_diagonal"] = (
+        "horizontal"
+    )
     speed: float = 0.75
     amplitude: float = 1.2
     phase: float = 0.0
@@ -115,14 +117,14 @@ def _get_default_regions() -> list[RegionEntityConfig]:
             region_id=0,
             bounds=(1.5, 5.5, 1.5, 5.5),
             prey=EntityPlacementConfig(
-                spawn_pos=(3.5, 2.25),
+                spawn_pos=(2.5, 2.5),
                 trajectory=StationaryTrajectoryConfig(),
                 size=0.25,
             ),
             predator=EntityPlacementConfig(
                 spawn_pos=(4.5, 4.5),
                 trajectory=LinearPatrolTrajectoryConfig(
-                    axis="diagonal", speed=1, amplitude=2.0
+                    axis="reverse_diagonal", speed=1, amplitude=2.0
                 ),
                 size=0.25,
             ),
@@ -152,15 +154,15 @@ def _get_default_regions() -> list[RegionEntityConfig]:
             region_id=2,
             bounds=(1.5, 5.5, 8.5, 12.5),
             prey=EntityPlacementConfig(
-                spawn_pos=(2.3, 9.3),
+                spawn_pos=(2.0, 9.0),
                 trajectory=WaypointPatrolTrajectoryConfig(
                     waypoints=[
-                        (2.3, 9.3),
-                        (4.7, 9.3),
-                        (4.7, 11.7),
-                        (2.3, 11.7),
+                        (2.0, 9.0),
+                        (5.0, 9.0),
+                        (5.0, 12.0),
+                        (2.0, 12.0),
                     ],
-                    speed=0.75,
+                    speed=1.0,
                     loop=True,
                 ),
                 size=0.25,
@@ -199,10 +201,11 @@ def _get_default_regions() -> list[RegionEntityConfig]:
 class AgentSpawnConfig(BaseModel):
     """Configuration for agent spawning."""
 
-    mode: Literal["neutral_corridor", "fixed", "center_9x9"] = (
+    mode: Literal["neutral_corridor", "fixed", "random"] = (
         "neutral_corridor"
     )
     fixed_pos: Position | None = None
+    min_clearance: float = 0.0
     perturbation: float = 0.25
     size: float = 0.1
     u_range: float = 5.0
