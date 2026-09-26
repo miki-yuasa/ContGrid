@@ -201,9 +201,7 @@ def _get_default_regions() -> list[RegionEntityConfig]:
 class AgentSpawnConfig(BaseModel):
     """Configuration for agent spawning."""
 
-    mode: Literal["neutral_corridor", "fixed", "random"] = (
-        "neutral_corridor"
-    )
+    mode: Literal["neutral_corridor", "fixed", "random"] = "neutral_corridor"
     fixed_pos: Position | None = None
     min_clearance: float = 0.0
     perturbation: float = 0.25
