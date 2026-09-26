@@ -24,6 +24,8 @@ from .core import (
 )
 
 __all__ = [
+    "DEFAULT_RENDER_CONFIG",
+    "DEFAULT_WORLD_CONFIG",
     "ActionOption",
     "Agent",
     "AgentState",
@@ -31,8 +33,6 @@ __all__ = [
     "BaseGymEnv",
     "BaseScenario",
     "Color",
-    "DEFAULT_RENDER_CONFIG",
-    "DEFAULT_WORLD_CONFIG",
     "Entity",
     "EntityShape",
     "EnvConfig",
@@ -42,7 +42,6 @@ __all__ = [
     "ScenarioConfigT",
     "World",
     "WorldConfig",
-    "DEFAULT_WORLD_CONFIG",
 ]
 
 # Register custom gymnasium environments
@@ -65,4 +64,12 @@ gym.register(
     id="contgrid/Zone-v0",
     entry_point="contgrid.envs.zone:ZoneEnv",
     max_episode_steps=250,
+)
+
+
+### Prey-Predator Environment ###
+gym.register(
+    id="contgrid/PreyPred-v0",
+    entry_point="contgrid.envs.prey_pred:PreyPredEnv",
+    max_episode_steps=300,
 )
