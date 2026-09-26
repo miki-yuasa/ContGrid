@@ -1,4 +1,4 @@
-RGB = tuple[int, int, int]
+HexColor = str
 
 Position = tuple[float, float]
 CellPosition = tuple[int, int]

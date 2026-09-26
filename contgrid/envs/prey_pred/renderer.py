@@ -85,7 +85,7 @@ class PreyPredRenderer(Renderer):
                     ax.plot(
                         xs,
                         ys,
-                        color=item.color_normalized,
+                        color=item.color.value,
                         linestyle=":",
                         linewidth=1.5,
                         alpha=0.6,

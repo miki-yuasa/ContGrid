@@ -221,8 +221,8 @@ class TestPreyPredEnv(parameterized.TestCase):
         self.addCleanup(env.close)
         env.reset()
         for item in env.scenario.trajectory_items:
-            expected_rgb = tuple(c / 255.0 for c in item.color.value)
-            self.assertEqual(item.color_normalized, expected_rgb)
+            self.assertTrue(item.color.value.startswith("#"))
+            self.assertEqual(len(item.color.value), 7)
 
 
 if __name__ == "__main__":

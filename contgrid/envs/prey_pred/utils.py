@@ -22,7 +22,7 @@ PREY_COLORS: list[Color] = [
 ]
 PRED_COLORS: list[Color] = [
     Color.RED,
-    Color.BLUE,
+    Color.PINK,
     Color.GREY,
     Color.ORANGE,
 ]
@@ -36,13 +36,6 @@ class TrajectoryRenderItem(BaseModel):
 
     trajectory: BaseTrajectory
     color: Color
-
-    @property
-    def color_normalized(self) -> tuple[float, float, float]:
-        """Convert Color enum RGB (0-255) to matplotlib-compatible (0.0-1.0)."""
-        r, g, b = self.color.value
-        return (r / 255.0, g / 255.0, b / 255.0)
-
 
 
 def _resolve_spawn_pos(

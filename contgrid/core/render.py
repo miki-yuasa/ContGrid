@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Any, Literal
 
-import matplotlib.patches as patches
 import numpy as np
 from gymnasium.core import Env
+from matplotlib import patches
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
@@ -65,7 +65,6 @@ class Renderer(ABC):
         options : dict[str, Any]
             Additional rendering options.
         """
-        pass
 
 
 class EnvRenderer(Renderer):
@@ -145,12 +144,11 @@ class EnvRenderer(Renderer):
                 text_line += 1
 
     def _draw_shape(self, entity: Entity, ax: Axes) -> None:
-        # Convert color tuple to matplotlib-compatible format (0-1 range)
         x: float = entity.draw_pos[0]
         y: float = entity.draw_pos[1]
         size: float = entity.size
         shape: EntityShape = entity.shape
-        color_normalized = tuple(c / 255.0 for c in entity.color)
+        facecolor = entity.color.value
         lw = 0.5
         hatch_lw: float = lw
         if shape == EntityShape.CIRCLE:
@@ -158,7 +156,7 @@ class EnvRenderer(Renderer):
             circle = patches.Circle(
                 (x, y),
                 size,
-                facecolor=color_normalized,
+                facecolor=facecolor,
                 edgecolor="black",
                 linewidth=lw,
                 zorder=2,
@@ -175,7 +173,7 @@ class EnvRenderer(Renderer):
                 (x, y),
                 size,
                 size,
-                facecolor=color_normalized,
+                facecolor=facecolor,
                 edgecolor=edgecolor,
                 linewidth=line_width,
                 zorder=0,
@@ -208,7 +206,6 @@ class PostRenderer(ABC):
         **kwargs : Any
             Additional rendering options specific to the renderer implementation.
         """
-        pass
 
     def get_image(self, fig: Figure) -> NDArray[np.uint8]:
         """
