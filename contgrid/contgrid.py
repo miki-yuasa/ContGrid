@@ -394,7 +394,8 @@ class BaseEnv(Generic[ObsType, ActType, ScenarioConfigT]):
             return np.ascontiguousarray(rgb_array[row_start:row_end, x0:x1])
         elif self.render_mode == "human":
             plt.draw()
-            plt.pause(1.0 / self.metadata["render_fps"])
+            fps = self.metadata.get("render_fps", 10)
+            plt.pause(1.0 / fps if isinstance(fps, (int, float)) else 0.1)
             return
 
     def close(self):
@@ -601,6 +602,7 @@ class BaseGymEnv(Env[ObsType, ActType], Generic[ObsType, ActType, ScenarioConfig
         seed: int | None = None,
         options: dict[str, Any] | None = None,
     ) -> tuple[ObsType, dict[str, Any]]:
+        super().reset(seed=seed)
         self.env.reset(seed=seed, options=options)
         obs = self.env.observe(self.env.agent_selection)
         info = self.env.infos[self.env.agent_selection]

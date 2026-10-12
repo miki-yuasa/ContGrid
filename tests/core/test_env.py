@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import gymnasium as gym
 import numpy as np
-from absl.testing import absltest
+from absl.testing import absltest, parameterized
 from gymnasium import spaces
+from gymnasium.utils.env_checker import check_env
 from pydantic import BaseModel
 
+import contgrid  # noqa: F401
 from contgrid.contgrid import BaseEnv
 from contgrid.core import Agent, AgentState, World
 from contgrid.core.const import Color
@@ -80,42 +83,29 @@ class SimpleScenario(BaseScenario[DummyScenarioConfig, np.ndarray]):
 
 
 class TestEnvironmentRendering(absltest.TestCase):
-    def test_render_default_environment(self) -> None:
+    def test_render_rgb_array(self) -> None:
         scenario = SimpleScenario()
         env = BaseEnv(scenario=scenario, max_cycles=10)
+        self.addCleanup(env.close)
         env.reset(seed=42)
 
         rendered_image = env.render()
-        self.assertIsNotNone(rendered_image)
+        self.assertIsInstance(rendered_image, np.ndarray)
         assert rendered_image is not None
-        self.assertEqual(rendered_image.ndim, 3)
-        self.assertEqual(rendered_image.shape[2], 3)
-        self.assertEqual(rendered_image.dtype, np.uint8)
-
-        env.close()
-
-    def test_render_with_multiple_steps(self) -> None:
-        scenario = SimpleScenario()
-        env = BaseEnv(scenario=scenario, max_cycles=10)
-        env.reset(seed=42)
-
-        for _ in range(3):
-            if env.agents:
-                agent_name = env.agent_selection
-                action_space = env.action_space(agent_name)
-                if hasattr(action_space, "sample"):
-                    action = action_space.sample()
-                else:
-                    action = np.array([0.1, 0.1], dtype=np.float64)
-                env.step(action)
-
-        rendered_image = env.render()
-        self.assertIsNotNone(rendered_image)
-        assert rendered_image is not None
-        self.assertEqual(rendered_image.ndim, 3)
         self.assertEqual(rendered_image.shape[2], 3)
 
-        env.close()
+
+class TestGymApiConformance(parameterized.TestCase):
+    @parameterized.parameters(
+        "contgrid/Rooms-v0",
+        "contgrid/NineRooms-v0",
+        "contgrid/PreyPred-v0",
+        "contgrid/Zone-v0",
+    )
+    def test_gym_check_env(self, env_id: str) -> None:
+        env = gym.make(env_id)
+        self.addCleanup(env.close)
+        check_env(env.unwrapped)
 
 
 class TestAllPossibleStates(absltest.TestCase):

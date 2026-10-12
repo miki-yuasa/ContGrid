@@ -3,7 +3,9 @@ from __future__ import annotations
 import numpy as np
 from absl.testing import absltest, parameterized
 
-from contgrid.core.grid import WallCollisionChecker
+from contgrid.core.grid_rust import (
+    WallCollisionCheckerAccelerated as WallCollisionChecker,
+)
 
 
 class ClipPositionTest(parameterized.TestCase):
