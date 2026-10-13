@@ -40,7 +40,9 @@ from .utils import (
 )
 
 
-class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]]):
+class PreyPredScenario(
+    BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]]
+):
     """A scenario for the Prey-Predator multi-entity navigation world."""
 
     def __init__(
@@ -57,8 +59,12 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
         self.trajectory_items: list[TrajectoryRenderItem] = []
         self.sim_time: float = 0.0
         self.dt: float = world_config.dt
-        self.wall_bounds: NDArray[np.float64] = np.zeros((0, 4), dtype=np.float64)
-        self.prey_capture_counts: NDArray[np.int32] = np.zeros(4, dtype=np.int32)
+        self.wall_bounds: NDArray[np.float64] = np.zeros(
+            (0, 4), dtype=np.float64
+        )
+        self.prey_capture_counts: NDArray[np.int32] = np.zeros(
+            4, dtype=np.int32
+        )
         self.prey_was_inside: list[bool] = [False] * 4
         self.current_subtask_idx: int = 0
         self.is_success: bool = False
@@ -89,8 +95,10 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
         self.wall_bounds = np.array(
             [
                 [
-                    w.state.pos[0] - w.size / 2.0, w.state.pos[0] + w.size / 2.0,
-                    w.state.pos[1] - w.size / 2.0, w.state.pos[1] + w.size / 2.0,
+                    w.state.pos[0] - w.size / 2.0,
+                    w.state.pos[0] + w.size / 2.0,
+                    w.state.pos[1] - w.size / 2.0,
+                    w.state.pos[1] + w.size / 2.0,
                 ]
                 for w in world.walls
             ],
@@ -106,10 +114,16 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
             self.predators.append(pred)
             self.pred_trajectories.append(q_traj)
             landmarks.extend([prey, pred])
-            self.trajectory_items.extend([
-                TrajectoryRenderItem(trajectory=p_traj, color=PREY_COLORS[rid % 4]),
-                TrajectoryRenderItem(trajectory=q_traj, color=PRED_COLORS[rid % 4]),
-            ])
+            self.trajectory_items.extend(
+                [
+                    TrajectoryRenderItem(
+                        trajectory=p_traj, color=PREY_COLORS[rid % 4]
+                    ),
+                    TrajectoryRenderItem(
+                        trajectory=q_traj, color=PRED_COLORS[rid % 4]
+                    ),
+                ]
+            )
 
         return landmarks
 
@@ -118,8 +132,11 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
     ) -> list[Agent]:
         agent = world.agents[0]
         pos = resolve_agent_spawn_pos(
-            world, agent.size, self.config.agent_spawn,
-            self.preys + self.predators, np_random,
+            world,
+            agent.size,
+            self.config.agent_spawn,
+            self.preys + self.predators,
+            np_random,
         )
 
         agent.state.pos = np.array(pos, dtype=np.float64)
@@ -131,7 +148,10 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
         self.is_success = False
         self.predator_collisions = 0
         self.prey_was_inside = [
-            bool(np.linalg.norm(agent.state.pos - p.state.pos) < agent.size + p.size)
+            bool(
+                np.linalg.norm(agent.state.pos - p.state.pos)
+                < agent.size + p.size
+            )
             for p in self.preys
         ]
         return world.agents
@@ -144,11 +164,16 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
             self.prey_trajectories,
             self.predators,
             self.pred_trajectories,
+            strict=True,
         ):
             p_pos, p_vel = p_traj.get_state(t)
             q_pos, q_vel = q_traj.get_state(t)
-            p_mov = not isinstance(reg.prey.trajectory, StationaryTrajectoryConfig)
-            q_mov = not isinstance(reg.predator.trajectory, StationaryTrajectoryConfig)
+            p_mov = not isinstance(
+                reg.prey.trajectory, StationaryTrajectoryConfig
+            )
+            q_mov = not isinstance(
+                reg.predator.trajectory, StationaryTrajectoryConfig
+            )
             p_pos, q_pos = enforce_bounds_and_clearance(
                 reg, p_pos, prey.size, p_mov, q_pos, pred.size, q_mov
             )
@@ -171,17 +196,15 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
         """Detect prey zone entries and increment edge-triggered capture counters."""
         now_inside: list[bool] = []
         for i, prey in enumerate(self.preys):
-            in_zone = float(np.linalg.norm(agent.state.pos - prey.state.pos)) < (
-                agent.size + prey.size
-            )
+            in_zone = float(
+                np.linalg.norm(agent.state.pos - prey.state.pos)
+            ) < (agent.size + prey.size)
             if in_zone and not self.prey_was_inside[i]:
                 self.prey_capture_counts[i] += 1
             now_inside.append(in_zone)
         return now_inside
 
-    def _check_predator_contacts(
-        self, agent: Agent, task: TaskConfig
-    ) -> float:
+    def _check_predator_contacts(self, agent: Agent, task: TaskConfig) -> float:
         """Check collision with predators and return penalty."""
         for j, pred in enumerate(self.predators):
             d = float(np.linalg.norm(agent.state.pos - pred.state.pos))
@@ -243,7 +266,9 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
             return 0.0
 
         self.current_subtask_idx += 1
-        if st.prey_absorbing or self.current_subtask_idx >= len(task.subtask_seq):
+        if st.prey_absorbing or self.current_subtask_idx >= len(
+            task.subtask_seq
+        ):
             agent.terminated = True
             if self.current_subtask_idx >= len(task.subtask_seq):
                 self.is_success = True
@@ -256,7 +281,9 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
         reward = -task.step_penalty + self._check_predator_contacts(agent, task)
         if not agent.terminated:
             if isinstance(task, UnorderedTaskConfig):
-                reward += self._process_unordered_capture(agent, task, now_inside)
+                reward += self._process_unordered_capture(
+                    agent, task, now_inside
+                )
             elif isinstance(task, OrderedTaskConfig):
                 reward += self._process_ordered_subtask(agent, task, now_inside)
 
@@ -268,10 +295,18 @@ class PreyPredScenario(BaseScenario[PreyPredScenarioConfig, dict[str, NDArray]])
         return self.obs_factory.observation(
             agent=agent,
             wall_dist=wall_d,
-            prey_positions=np.array([p.state.pos for p in self.preys], dtype=np.float64),
-            prey_velocities=np.array([p.state.vel for p in self.preys], dtype=np.float64),
-            predator_positions=np.array([q.state.pos for q in self.predators], dtype=np.float64),
-            predator_velocities=np.array([q.state.vel for q in self.predators], dtype=np.float64),
+            prey_positions=np.array(
+                [p.state.pos for p in self.preys], dtype=np.float64
+            ),
+            prey_velocities=np.array(
+                [p.state.vel for p in self.preys], dtype=np.float64
+            ),
+            predator_positions=np.array(
+                [q.state.pos for q in self.predators], dtype=np.float64
+            ),
+            predator_velocities=np.array(
+                [q.state.vel for q in self.predators], dtype=np.float64
+            ),
             prey_capture_counts=self.prey_capture_counts,
         )
 
