@@ -1,4 +1,4 @@
-"""PreyPredScenario implementation managing entities, movement, and task dispatch."""
+"""PreyPredScenario managing entities, movement, and task dispatch."""
 
 from __future__ import annotations
 
@@ -73,6 +73,7 @@ class PreyPredScenario(
     def init_agents(
         self, world: World, np_random: np.random.Generator | None = None
     ) -> list[Agent]:
+        """Initialize controlled agents for the scenario."""
         cfg = self.config.agent_spawn
         return [
             Agent(
@@ -86,6 +87,7 @@ class PreyPredScenario(
     def init_landmarks(
         self, world: World, np_random: np.random.Generator | None = None
     ) -> list[Landmark]:
+        """Initialize scenario landmarks including preys and predators."""
         self.preys.clear()
         self.predators.clear()
         self.prey_trajectories.clear()
@@ -130,6 +132,7 @@ class PreyPredScenario(
     def reset_agents(
         self, world: World, np_random: np.random.Generator
     ) -> list[Agent]:
+        """Reset agent states and spawn locations for a new episode."""
         agent = world.agents[0]
         pos = resolve_agent_spawn_pos(
             world,
@@ -183,6 +186,7 @@ class PreyPredScenario(
     def reset_landmarks(
         self, world: World, np_random: np.random.Generator
     ) -> list[Landmark]:
+        """Reset landmark states and trajectories for a new episode."""
         self.sim_time = 0.0
         self._update_entities_at_time(0.0)
         return world.landmarks
@@ -193,7 +197,7 @@ class PreyPredScenario(
         self._update_entities_at_time(self.sim_time)
 
     def _update_capture_counts(self, agent: Agent) -> list[bool]:
-        """Detect prey zone entries and increment edge-triggered capture counters."""
+        """Detect prey zone entries and update capture counters."""
         now_inside: list[bool] = []
         for i, prey in enumerate(self.preys):
             in_zone = float(
@@ -217,13 +221,16 @@ class PreyPredScenario(
                     agent.terminated = True
                 return float(task.predator_penalty)
 
-            if self.current_subtask_idx < len(task.subtask_seq):
-                st = task.subtask_seq[self.current_subtask_idx]
-                if j in st.avoid_predators:
-                    if st.predator_absorbing:
-                        agent.terminated = True
-                    return float(st.penalty)
-            return 0.0
+            if self.current_subtask_idx >= len(task.subtask_seq):
+                return 0.0
+
+            st = task.subtask_seq[self.current_subtask_idx]
+            if j not in st.avoid_predators:
+                return 0.0
+
+            if st.predator_absorbing:
+                agent.terminated = True
+            return float(st.penalty)
 
         return 0.0
 
@@ -243,7 +250,9 @@ class PreyPredScenario(
                 and self.prey_capture_counts[i] == 1
             )
         )
-        if all(self.prey_capture_counts[p] >= 1 for p in task.required_preys):
+        if task.required_preys and all(
+            self.prey_capture_counts[p] >= 1 for p in task.required_preys
+        ):
             self.is_success = True
             step_reward += task.completion_reward
             agent.terminated = True
@@ -276,6 +285,7 @@ class PreyPredScenario(
         return float(st.reward)
 
     def reward(self, agent: Agent, world: World) -> float:
+        """Compute scalar reward for the current step."""
         task = self.config.task
         now_inside = self._update_capture_counts(agent)
         reward = -task.step_penalty + self._check_predator_contacts(agent, task)
@@ -291,6 +301,7 @@ class PreyPredScenario(
         return float(reward)
 
     def observation(self, agent: Agent, world: World) -> dict[str, NDArray]:
+        """Construct dictionary observation for the controlled agent."""
         wall_d = compute_wall_distances(agent.state.pos, self.wall_bounds)
         return self.obs_factory.observation(
             agent=agent,
@@ -311,6 +322,7 @@ class PreyPredScenario(
         )
 
     def observation_space(self, agent: Agent, world: World) -> spaces.Space:
+        """Return Gymnasium observation space for the agent."""
         wl = world.grid.wall_limits
         return spaces.Dict(
             self.obs_factory.obs_space_dict(
@@ -322,6 +334,7 @@ class PreyPredScenario(
         )
 
     def info(self, agent: Agent, world: World) -> dict[str, Any]:
+        """Return diagnostic info dictionary for the step."""
         return {
             "is_success": self.is_success,
             "prey_capture_counts": self.prey_capture_counts.copy(),

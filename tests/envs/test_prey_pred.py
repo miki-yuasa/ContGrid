@@ -144,10 +144,26 @@ class TestPreyPredEnv(absltest.TestCase):
         min_dist = min(
             float(np.linalg.norm(pred.state.pos - prey.state.pos))
             for prey, pred in zip(
-                env.scenario.preys, env.scenario.predators
+                env.scenario.preys, env.scenario.predators, strict=True
             )
         )
         self.assertGreaterEqual(min_dist, 0.70 - 1e-4)
+
+    def test_empty_required_preys_does_not_terminate(self) -> None:
+        task_cfg = UnorderedTaskConfig(
+            required_preys=[],
+            step_penalty=0.0,
+        )
+        env = PreyPredEnv(
+            scenario_config=PreyPredScenarioConfig(task=task_cfg)
+        )
+        self.addCleanup(env.close)
+        env.reset()
+
+        agent = env.world.agents[0]
+        env.scenario.reward(agent, env.world)
+        self.assertFalse(agent.terminated)
+        self.assertFalse(env.scenario.is_success)
 
 
 if __name__ == "__main__":
