@@ -20,7 +20,7 @@ from .nine_rooms_env import (
     NineRoomsEnvConfig,
 )
 from .scenario import RoomsScenario
-from .spawn_strategies import (
+from .spawn import (
     FixedSpawnConfig,
     FixedSpawnStrategy,
     PathGaussianConfig,

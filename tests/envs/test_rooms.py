@@ -205,6 +205,28 @@ class TestRoomsEnv(absltest.TestCase):
                 _min_distance_to_any_segment(lava_pos, clipped_segs), 1e-6
             )
 
+    def test_path_gaussian_reference_spawn(self) -> None:
+        spawn_config = SpawnConfig(
+            agent=(3.0, 3.0),
+            goal=ObjConfig(pos=(9.0, 8.0), reward=1.0, absorbing=False),
+            lavas=[ObjConfig(pos=None), ObjConfig(pos=None)],
+            holes=[ObjConfig(pos=None), ObjConfig(pos=None)],
+            spawn_method=PathGaussianConfig(
+                gaussian_std=0.5,
+                min_spacing=0.5,
+                use_rust=False,
+            ),
+        )
+        env = RoomsEnv(
+            scenario_config=RoomsScenarioConfig(spawn_config=spawn_config)
+        )
+        self.addCleanup(env.close)
+        env.reset(seed=42)
+
+        scenario = cast(RoomsScenario, env.scenario)
+        self.assertEqual(len(scenario.lava_pos), 2)
+        self.assertEqual(len(scenario.hole_pos), 2)
+
 
 if __name__ == "__main__":
     absltest.main()

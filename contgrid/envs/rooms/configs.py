@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from contgrid.core.typing import Position
 
-from .spawn_strategies import FixedSpawnConfig, SpawnMethodConfig
+from .spawn import FixedSpawnConfig, SpawnMethodConfig
 
 
 class RewardConfig(BaseModel):

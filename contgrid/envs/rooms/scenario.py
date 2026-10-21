@@ -28,7 +28,7 @@ from .observations import (
     GoalDistObsFactory,
     ObstacleDistObsFactory,
 )
-from .spawn_strategies import (
+from .spawn import (
     FixedSpawnConfig,
     FixedSpawnStrategy,
     PathGaussianConfig,
